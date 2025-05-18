@@ -1,86 +1,93 @@
-# About
+# CLAUDE.md
 
-This is a simple CLI (called 'repot') that editors can use to send text to a Python REPL (aka console) running in a tmux pane on the right.
-Both Python and iPython REPLs are supported.
+Instructions, rules and context for Claude Code.
 
-The CLI exposes two commands.
+Claude has inherited a project that was worked on by a former colleague. The code is not entirely functional. Certain areas of the current implementation are flawed and should be revised. Claude is not afraid to suggest radical changes where it deems appropriate.
 
-1. Connect: Used to connect the editor to the target pane. In a more fleshed-out implementation, connect might
-   set an environment variable that connects a given buffer to the target REPL. Or it might use a jupytre kernel.
-   For now let's keep things simple and skip the 'connect' command. Instead, let's assume the REPL is always in the next
-   TMUX pane on the right.
+As an experienced software engineer, Claude knows the importance of asking questions to clarify possibly ambiguous requirements.
 
-2. Send: This essentially navigates to the target pane (if sending directly isn't supported) and pastes the command's
-   first argument (a string) inside the console. If the argument is '-' then send/paste STDIN.
+Claude does not waste time on niceties such as 'great question', nor do they apologize when they receive feedback. Claude is critical of their decisions, but also confident. Claude learns from its past mistakes.
 
-# Assumptions
+Claude addresses the user as 'Adriaan'.
 
-The CLI is implemented in Python (3.12). Use uv (by astral.sh) for python, venv, and depdendency management.
+## Project: REPOT
 
-This CLI is designed in the first place to be called from the Helix editor, which neither has builtin repl
-support nor exposes a plugin API. Helix is running in a TMUX pane.
+### About
 
-Using a helix keybind, the CLI will be called as `:pipe-to repot send -`, where `-` indicates that input is coming from STDIN.
+REPOT = 'Read Eval Print Over There'.
+REPOT is a simple CLI for sending text to an interactive programming console, aka REPL.
 
-The REPL is running in a TMUX pane immediately to the right.
+Current scope:
 
-The CLI can be installed with pip/uv and exposes an executable as an entrypoint.
+- Supported REPLs (by language)
+   - Python:
+      - python
+      - ptpython
+      - ipython
 
-# Challenges
+- Targets (a pane running inside [...]):
+   - TMUX
 
-REPLs/consoles differ in how they expect to receive pasted input. Bracketed pasting is important in some cases.
-Look up the code of related projects such as vim-slime.vim to learn how they deal with this.
+CLI subcommands:
+
+1. `connect`: Connect the editor to the target pane. (Will be implemented in the future. See 'Assumptions' section.)
+2. `send`: Send code to REPL in target pane and send virual carriage return to evaluate code.
+
+How to use:
+
+```bash
+# Pipe STDIN to `send`
+cat code.py | repot send -  # the `-` is optional.
+
+# Or pass code as argument
+repot send 'print("hello!")'
+```
+
+Context:
+
+repot aims to provide the same functionality as [vim-slime](https://github.com/jpalardy/vim-slime), except without being tied to vim.
+It can be used directly from the command line or inside an editor, particularly one that doesn't support plugins yet.
+
+I will be using repot inside the Helix editor (which is running inside Tmux), where I will be using it as follows:
+
+1. Make visual line selection
+2. Execute the command `:pipe-to repot send` to pipe the selection as STDIN to repot and send it to the REPL in the target pane.
+
+Repot exists because sending well-formatted code to a REPL is actually very difficult. This is because REPLs/consoles differ in how they expect to receive sent/pasted text. In particular, indentation and newlines tend to cause issues, especially in a language with significant whitespace such as Python.
+
+### Implementation Assumptions
+
+The target REPL is running in a TMUX pane immediately to the right.
+
+Detecting the target REPL is difficult. If you can find an elegant and reliable way to do it, you may implement automatic REPL detection. However, it is also okay to force users to specify the target repl with flags such as `--ipy`, `--py`, `--ptpy`.
 
 Here's what you can assume about python REPLs:
 
 - Python <= 3.12 - No support for bracketed paste. Translate vimscript logic at https://github.com/jpalardy/vim-slime/blob/main/ftplugin/python/slime.vim
 - Python = 3.13  - Bracketed paste supported.
-- iPython - bracketed paste supported
+- iPython - bracketed paste supported, also supports %cpaste command for complex code
 - ptpython - bracketed paste supported.
+
+Note: Implementation now successfully handles all these REPLs with explicit REPL flags (--py, --ipy, --ptpy). Python 3.12 without bracketed paste uses specialized line-by-line mode with special collection handling.
 
 Not only sending code is important, but also executing it. This usually means sending a carriage return to simulate the user inputing 'enter'.
 
-# Implementation Details
-
-## REPL Detection
-
-- The tool detects whether the target pane is running IPython or standard Python REPL.
-- For IPython, it checks for specific patterns like "in [", "ipython", or "%cpaste" in the pane content.
-- For standard Python, it checks the pane's command name.
-
-## Code Handling
-
-1. **Text Preprocessing**:
-   - Common indentation is detected and removed
-   - Extra blank lines are normalized
-
-2. **Standard Python REPL Strategy**:
-   - Multiline code (especially functions with indentation) is sent line-by-line
-   - Code is intelligently split into "definition blocks" and "execution blocks"
-   - Each block is sent separately with appropriate delays
-   - Special handling ensures proper indentation and syntax
-
-3. **IPython REPL Strategy**:
-   - Uses %cpaste magic command
-   - Sends code line-by-line within the paste mode
-   - Properly terminates with "--" on a separate line
-   - Uses Ctrl+D as a fallback to ensure termination
-
-4. **Single Line Strategy**:
-   - Uses bracketed paste mode for proper terminal handling
-   - Falls back to buffer-based methods for longer text
-
-## Command Line Options
-
-- `--ipython`: Force IPython mode (%cpaste)
-- `--python`: Force standard Python REPL mode
-- `--no-bracketed-paste`: Disable bracketed paste mode
-
-# Related Projects
+### Related Projects
 
 - vim-slime.vim (https://github.com/jpalardy/vim-slime)
 - iron.nvim (https://github.com/Vigemus/iron.nvim)
 
-# Developer Guidelines
 
-Use type hints.
+## Development guidelines
+
+### Basics
+
+- The CLI is implemented in Python (3.12). Use uv (by astral.sh) for python, venv, and depdendency management.
+- The CLI can be installed with pip/uv and exposes an executable as an entrypoint.
+
+### Important rules
+
+- Type hints are used consistently.
+- Avoid extraneous dependencies by making use of the standard library.
+- Write modern Python. This CLI will not be used as a library. It is recommended to target recent Python language features.
+- The coding style should be more similar to Rust than Java.
