@@ -4,19 +4,21 @@ This module provides utilities for processing and sending Python code to differe
 
 - Standard Python < 3.13: No bracketed paste support, needs special handling
 - Standard Python >= 3.13: Has bracketed paste support
-- IPython: Uses bracketed paste
+- IPython: Uses bracketed paste or %cpaste
 - ptpython: Uses bracketed paste
 """
 
 import re
+import textwrap
+from typing import List, Dict, Any
+
+from repot.common import SendingStep
 
 
 def preprocess_code(text: str) -> str:
     """Preprocess Python code for sending to any REPL.
     
     This performs basic preprocessing that's appropriate for all REPL types.
-    For Python < 3.13 without bracketed paste, use preprocess_for_line_mode
-    after calling this function.
     
     Args:
         text: The Python code to preprocess.
@@ -24,8 +26,6 @@ def preprocess_code(text: str) -> str:
     Returns:
         Preprocessed code ready for pasting.
     """
-    import textwrap
-    
     # Remove extra blank lines (more than one consecutive)
     text = re.sub(r'(^|\n)\s*\n+', '\n', text)
     
@@ -38,7 +38,46 @@ def preprocess_code(text: str) -> str:
     return text
 
 
-def preprocess_for_line_mode(text: str) -> list:
+def format_for_sending(text: str, line_mode: bool = False, 
+                      special_mode: bool = False) -> List[Dict[str, Any]]:
+    """Format Python code for sending to a REPL.
+    
+    Args:
+        text: The preprocessed Python code to format.
+        line_mode: Whether to use line-by-line mode (for Python < 3.13).
+        special_mode: Whether to use %cpaste (for IPython).
+        
+    Returns:
+        A list of steps to send the code.
+    """
+    if special_mode:  # IPython %cpaste mode
+        return _format_for_cpaste(text)
+    elif line_mode:  # Python < 3.13 without bracketed paste
+        return _preprocess_for_line_mode(text)
+    else:  # Standard bracketed paste mode
+        return [SendingStep.bracketed_text(text)]
+
+
+def _format_for_cpaste(text: str) -> List[Dict[str, Any]]:
+    """Format text for sending to IPython with %cpaste command.
+    
+    This enables reliable pasting of multi-line code in IPython.
+    
+    Args:
+        text: The Python code to send.
+        
+    Returns:
+        A list of steps to execute the code using %cpaste.
+    """
+    return [
+        SendingStep.command('%cpaste -q', wait_for_prompt=False),
+        SendingStep.delay(0.1),
+        SendingStep.text(text, wait_for_prompt=False),
+        SendingStep.command('--', wait_for_prompt=True)
+    ]
+
+
+def _preprocess_for_line_mode(text: str) -> List[Dict[str, Any]]:
     """Preprocess Python code for line-by-line sending to Python < 3.13.
     
     This function transforms multi-line code into a series of lines that can be 
@@ -46,14 +85,11 @@ def preprocess_for_line_mode(text: str) -> list:
     It handles significant whitespace and ensures proper execution of blocks.
     
     Args:
-        text: The Python code to preprocess (should already be run through preprocess_code).
+        text: The Python code to preprocess.
         
     Returns:
-        A list of dictionaries with 'line' and 'wait_for_prompt' keys, ready for sending.
+        A list of steps to send the code.
     """
-    import textwrap
-    
-    # Split into groups based on syntax
     lines = text.splitlines()
     result = []
     
@@ -71,10 +107,7 @@ def preprocess_for_line_mode(text: str) -> list:
     # Process imports first
     for imp in imports:
         if imp.strip():  # Skip empty lines
-            result.append({
-                'line': imp,
-                'wait_for_prompt': True
-            })
+            result.append(SendingStep.command(imp))
     
     # Track multi-line statements
     i = 0
@@ -89,8 +122,8 @@ def preprocess_for_line_mode(text: str) -> list:
             
         # Handle multi-line statements with brackets
         if ('(' in stripped or '[' in stripped or '{' in stripped) and not (stripped.endswith(')') or 
-                                                                       stripped.endswith(']') or 
-                                                                       stripped.endswith('}')):
+                                                                     stripped.endswith(']') or 
+                                                                     stripped.endswith('}')):
             # This is the start of a multi-line collection
             # We need to identify all lines that belong to this collection
             collection_lines = [line]
@@ -116,20 +149,14 @@ def preprocess_for_line_mode(text: str) -> list:
                 
             # Join the collection as one line to avoid indentation issues
             collection_text = ' '.join(collection_lines)
-            result.append({
-                'line': collection_text,
-                'wait_for_prompt': True
-            })
+            result.append(SendingStep.command(collection_text))
             i = j
         
         # Handle normal Python blocks with indentation
         elif line.rstrip().endswith(':'):  # Start of a block like if/for/def/class
             # This is the start of an indented block
             indentation_level = len(line) - len(line.lstrip())
-            result.append({
-                'line': line,
-                'wait_for_prompt': False  # Don't wait for prompt after starting a block
-            })
+            result.append(SendingStep.command(line, wait_for_prompt=False))
             
             # Process the indented lines in this block
             j = i + 1
@@ -148,109 +175,16 @@ def preprocess_for_line_mode(text: str) -> list:
                     break
                 
                 # Send the indented line
-                result.append({
-                    'line': next_line,
-                    'wait_for_prompt': False  # Don't wait inside a block
-                })
+                result.append(SendingStep.command(next_line, wait_for_prompt=False))
                 j += 1
                 
             # At the end of a block, add an empty line to execute it
-            result.append({
-                'line': '',
-                'wait_for_prompt': True  # Wait after executing a block
-            })
+            result.append(SendingStep.command('', wait_for_prompt=True))
             i = j
         
         # Normal line (not a block or collection)
         else:
-            result.append({
-                'line': line,
-                'wait_for_prompt': True
-            })
+            result.append(SendingStep.command(line))
             i += 1
     
     return result
-
-
-def format_for_cpaste(text: str) -> list:
-    """Format text for sending to IPython with %cpaste command.
-    
-    This enables reliable pasting of multi-line code in IPython.
-    
-    Args:
-        text: The Python code to send.
-        
-    Returns:
-        A list of steps to execute the code using %cpaste.
-    """
-    return [
-        {
-            'type': 'command',
-            'content': '%cpaste -q',
-            'wait_for_prompt': False
-        },
-        {
-            'type': 'delay',
-            'content': 0.1
-        },
-        {
-            'type': 'text',
-            'content': text,
-            'wait_for_prompt': False
-        },
-        {
-            'type': 'command',
-            'content': '--',
-            'wait_for_prompt': True
-        }
-    ]
-
-
-def detect_block_structure(text: str) -> list:
-    """Detect the indentation structure of a Python code block.
-    
-    This is particularly useful for Python < 3.13 when not using bracketed paste.
-    
-    Args:
-        text: The Python code to analyze.
-        
-    Returns:
-        A list of blocks with their indentation levels and content.
-    """
-    lines = text.splitlines()
-    blocks = []
-    current_block = []
-    current_indent = 0
-    
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if not stripped:  # Empty line
-            continue
-            
-        indent = len(line) - len(line.lstrip())
-        
-        # Start of a new block or continuing an existing one?
-        if current_block and indent > current_indent:
-            # Continuing a block with increased indentation
-            current_block.append(line)
-        elif current_block and indent == current_indent:
-            # Continuing a block at the same level
-            current_block.append(line)
-        else:
-            # Start a new block
-            if current_block:
-                blocks.append({
-                    'indent': current_indent,
-                    'lines': current_block
-                })
-            current_block = [line]
-            current_indent = indent
-    
-    # Add the last block
-    if current_block:
-        blocks.append({
-            'indent': current_indent,
-            'lines': current_block
-        })
-    
-    return blocks

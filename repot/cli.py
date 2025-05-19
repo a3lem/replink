@@ -4,8 +4,8 @@ import argparse
 import sys
 from typing import List, Optional
 
-from repot import tmux
-from repot.repls import python
+from repot.targets import tmux, send_to_repl
+from repot.languages import python
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -101,17 +101,15 @@ def send_command(text: str, repl_type: str, use_bracketed_paste: bool = True,
     # Process the code to handle indentation
     processed_text = python.preprocess_code(text)
     
+    # Format code for sending based on REPL type and options
+    line_mode = repl_type == 'py' and not is_py13 and not use_bracketed_paste
+    special_mode = repl_type == 'ipy' and use_cpaste
+    steps = python.format_for_sending(processed_text, line_mode, special_mode)
+    
     # Send the text to the pane
     try:
-        # Send the text to the specified REPL type
-        tmux.send_to_repl(
-            target_pane,
-            processed_text,
-            repl_type=repl_type,
-            use_bracketed_paste=use_bracketed_paste,
-            use_cpaste=use_cpaste,
-            is_py13=is_py13
-        )
+        # Send the formatted steps to the target
+        send_to_repl(target_pane, steps)
         return 0
     except Exception as e:
         print(f"Error sending text: {e}", file=sys.stderr)

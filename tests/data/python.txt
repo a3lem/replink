@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-
 @dataclass  # mark class as a dataclass
 class Person:
     name: str
@@ -37,3 +36,10 @@ person_name_lengths = [len(person.name) for person in people]
 people_avg_age = sum(person_name_lengths) / n_people
 
 print(f"{people_avg_age=}")
+
+
+def hello_world():
+    for i in range(4):
+        print("hello world")
+
+
