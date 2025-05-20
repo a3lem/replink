@@ -2,6 +2,7 @@
 
 ---
 
-
-# AI! insert image element that includes repot logo located in assets.
+<p align="center">
+  <img src="assets/repot-logo.png" alt="Repot Logo" width="200">
+</p>
 
