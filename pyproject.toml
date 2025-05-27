@@ -5,8 +5,10 @@ description = "A simple CLI to send text to a Python REPL in a tmux pane"
 readme = "README.md"
 requires-python = ">=3.12"  # extend to lower versions?
 dependencies = [
-    "ipykernel>=6.29.5",  # TODO: drop
-    "ipython>=9.2.0",  # TODO: drop
+    "grip>=4.6.2",
+    "ipykernel>=6.29.5", # TODO: drop
+    "ipython>=9.2.0",
+    "tool>=0.8.0", # TODO: drop
     "typing-extensions>=4.0.0",
 ]
 
@@ -19,3 +21,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["repot"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]

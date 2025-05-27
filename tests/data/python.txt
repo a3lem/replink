@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 @dataclass  # mark class as a dataclass
 class Person:
     name: str
@@ -13,6 +14,7 @@ class Person:
 
     def parse_address(self) -> str:
         ...
+
 
 people = [
     Person("Alice", 25, "123 Main St"),
@@ -41,5 +43,4 @@ print(f"{people_avg_age=}")
 def hello_world():
     for i in range(4):
         print("hello world")
-
 

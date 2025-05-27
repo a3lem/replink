@@ -1,8 +1,8 @@
-# REPOT
+# repot
 
----
+<img src="assets/repot.logo.png" alt="Repot Logo" align="left" width="100" style="border-radius: 20px;"/>
+<em>Read Eval Print Over There</em>
+<br clear="both"/>
 
-<p align="center">
-  <img src="assets/repot-logo.png" alt="Repot Logo" width="200">
-</p>
+## Install
 

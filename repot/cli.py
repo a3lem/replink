@@ -2,10 +2,11 @@
 
 import argparse
 import sys
-from typing import List, Optional
+import typing as T
 
-from repot.targets import tmux, send_to_repl
-from repot.languages import python
+from repot.core import send
+from repot.targets.interface import TARGETS
+from repot.targets.tmux import TmuxConfig
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -28,91 +29,75 @@ def create_parser() -> argparse.ArgumentParser:
         help="Text to send. Use '-' to read from stdin (default: -)"
     )
     
-    # REPL type options (mutually exclusive)
-    repl_group = send_parser.add_argument_group("REPL options")
-    repl_type = repl_group.add_mutually_exclusive_group(required=True)
-    repl_type.add_argument(
+    # REPL type option
+    send_parser.add_argument(
         "--py",
         action="store_true",
-        help="Send to Python REPL (uses bracketed paste for Python >= 3.13)"
-    )
-    repl_type.add_argument(
-        "--ipy",
-        action="store_true",
-        help="Send to IPython REPL (uses bracketed paste by default)"
-    )
-    repl_type.add_argument(
-        "--ptpy",
-        action="store_true",
-        help="Send to ptpython REPL (uses bracketed paste)"
+        required=True,
+        help="Send to Python REPL (python, ptpython, or ipython)"
     )
     
-    # Additional options
-    repl_group.add_argument(
+    # Additional options (mutually exclusive)
+    mode_group = send_parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
         "--no-bpaste",
         action="store_true",
         help="Disable bracketed paste mode (required for Python < 3.13)"
     )
-    repl_group.add_argument(
-        "--cpaste",
+    mode_group.add_argument(
+        "--ipy-cpaste",
         action="store_true",
-        help="Use IPython's %%cpaste command (only for --ipy)"
+        help="Use IPython's %%cpaste command (IPython only)"
     )
-    repl_group.add_argument(
-        "--py13",
-        action="store_true",
-        help="Specify Python >= 3.13 (has built-in bracketed paste support)"
-    )
-
+    # 
     # Connect command (placeholder for future implementation)
-    subparsers.add_parser(
+    connect_parser = subparsers.add_parser(
         "connect", help="Connect to a specific tmux pane (not implemented yet)"
     )
 
     return parser
 
 
-def send_command(text: str, repl_type: str, use_bracketed_paste: bool = True, 
-                use_cpaste: bool = False, is_py13: bool = False) -> int:
+def send_command(text: str, args: argparse.Namespace) -> int:
     """Execute the send command.
 
     Args:
         text: The text to send to the REPL.
-        repl_type: Type of REPL: 'py', 'ipy', or 'ptpy'.
-        use_bracketed_paste: Whether to use bracketed paste mode.
-        use_cpaste: Whether to use IPython's %cpaste command.
-        is_py13: Whether Python is version >= 3.13.
+        args: Command line arguments.
 
     Returns:
         Exit code (0 for success, non-zero for failure).
     """
-    # Find the target pane (the one to the right)
-    target_pane = tmux.get_next_pane()
-
-    if not target_pane:
-        print("Error: No pane found to the right of the current pane", file=sys.stderr)
-        return 1
+    # Determine language configuration based on args
+    language = 'python'  # We only support Python for now
     
-    # If cpaste is specified but not using IPython, show warning
-    if use_cpaste and repl_type != 'ipy':
-        print("Warning: --cpaste option is only valid with --ipy, ignoring", file=sys.stderr)
-        use_cpaste = False
+    # Check bracketed paste option
+    use_bracketed_paste = not args.no_bpaste
     
-    # Process the code to handle indentation
-    processed_text = python.preprocess_code(text)
+    language_config: dict[str, T.Any] = {
+        'use_cpaste': args.ipy_cpaste,
+        'ipython_pause': 100,  # 100ms pause for cpaste by default
+        'use_bracketed_paste': use_bracketed_paste,  # Pass the bracketed paste preference to language
+    }
     
-    # Format code for sending based on REPL type and options
-    line_mode = repl_type == 'py' and not is_py13 and not use_bracketed_paste
-    special_mode = repl_type == 'ipy' and use_cpaste
-    steps = python.format_for_sending(processed_text, line_mode, special_mode)
-    
-    # Send the text to the pane
+    # Create target configuration
     try:
-        # Send the formatted steps to the target
-        send_to_repl(target_pane, steps)
+        # For now, we only support tmux
+        target = 'tmux'
+        
+        # Get the target config using the target's config method
+        target_impl = TARGETS[target]
+        target_config = target_impl.config()
+        
+        # Update config with bracketed paste preference
+        if isinstance(target_config, TmuxConfig):
+            target_config.use_bracketed_paste = use_bracketed_paste
+        
+        # Send the text
+        send(text, target, target_config, language, language_config)
         return 0
     except Exception as e:
-        print(f"Error sending text: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
@@ -127,7 +112,7 @@ def connect_command() -> int:
     return 0
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: T.Optional[list[str]] = None) -> int:
     """Main entry point for the CLI.
 
     Args:
@@ -145,29 +130,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             # Read from stdin
             text = sys.stdin.read()
 
-        # Determine REPL type
-        repl_type = None
-        if args.py:
-            repl_type = 'py'
-        elif args.ipy:
-            repl_type = 'ipy'
-        elif args.ptpy:
-            repl_type = 'ptpy'
-        
-        # If no REPL type specified, show help
-        if not repl_type:
-            parser.print_help()
-            print("\nError: You must specify a REPL type (--py, --ipy, or --ptpy)", 
-                  file=sys.stderr)
-            return 1
-
-        return send_command(
-            text,
-            repl_type,
-            use_bracketed_paste=not args.no_bpaste,
-            use_cpaste=getattr(args, 'cpaste', False),
-            is_py13=getattr(args, 'py13', False)
-        )
+        return send_command(text, args)
     elif args.command == "connect":
         return connect_command()
     else:

@@ -1,3 +1,7 @@
-"""Target package."""
+"""Target package for repot.
 
-from repot.targets.tmux import get_next_pane, send_to_repl
+This package contains implementations of different targets that repot can send to.
+Currently only tmux is supported.
+"""
+
+from repot.targets.interface import Target, TargetConfig, TARGETS

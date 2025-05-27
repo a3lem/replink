@@ -1,13 +1,64 @@
-"""Tmux interaction module."""
+"""Tmux target implementation."""
 
 import subprocess
-import time
-import tempfile
-from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
+from typing import Optional
 
-# Bracketed paste mode control sequences
-BRACKETED_PASTE_START = "\033[200~"  # ESC [ 200 ~
-BRACKETED_PASTE_END = "\033[201~"    # ESC [ 201 ~
+from repot.targets.interface import TargetConfig, TARGETS
+
+
+@dataclass
+class TmuxConfig(TargetConfig):
+    """Configuration for tmux target."""
+    pane_id: str
+    use_bracketed_paste: bool = True
+
+
+class TmuxTarget:
+    """Tmux target implementation."""
+    
+    @staticmethod
+    def config() -> TmuxConfig:
+        """Configure the tmux target.
+        
+        Currently, this automatically gets the pane to the right of the current pane.
+        In the future, this could be expanded to allow selecting any pane.
+        
+        Returns:
+            TmuxConfig with the target pane ID.
+        """
+        target_pane = get_next_pane()
+        if not target_pane:
+            raise ValueError("No pane found to the right of the current pane")
+        
+        return TmuxConfig(pane_id=target_pane)
+    
+    @staticmethod
+    def send(config: TmuxConfig, text: str) -> None:
+        """Send text to a tmux pane.
+        
+        Args:
+            config: Tmux configuration.
+            text: Text to send.
+        """
+        if not text:
+            return
+
+        
+        # Decide which method to use based on configuration and text length
+        if config.use_bracketed_paste:
+            if len(text) > 500:
+                send_with_buffer(config.pane_id, text, bracketed_paste=True)
+            else:
+                send_with_bracketed_paste(config.pane_id, text)
+        else:
+            # For non-bracketed paste, send as a single block
+            # The language escape function has already formatted the text properly
+            if len(text) > 500:
+                # Use chunking for long text even without bracketed paste
+                send_with_buffer(config.pane_id, text, bracketed_paste=False)
+            else:
+                send_without_bracketed_paste(config.pane_id, text)
 
 
 def get_current_pane() -> str:
@@ -41,143 +92,137 @@ def get_next_pane() -> Optional[str]:
     return target if target != current else None
 
 
-def send_to_repl(target_id: str, steps: List[Dict[str, Any]]) -> None:
-    """Send code to a REPL in a tmux pane.
+def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool, chunk_size: Optional[int] = None) -> None:
+    """Common implementation for sending text to tmux.
+    
+    This follows vim-slime's approach exactly:
+    1. For bracketed paste: strip trailing newlines and track if we need to send Enter
+    2. For non-bracketed paste: send text as-is (Python REPL handles newlines)
+    3. Cancel any existing command
+    4. Load text into buffer (optionally in chunks)
+    5. Paste buffer with or without bracketed paste mode
+    6. Send Enter if needed (only for bracketed paste mode)
     
     Args:
-        target_id: The ID of the target tmux pane.
-        steps: The steps to execute to send the code.
+        target_id: The target tmux pane ID.
+        text: The text to send.
+        bracketed_paste: Whether to use bracketed paste mode (-p flag).
+        chunk_size: If provided, send text in chunks of this size.
     """
-    for step in steps:
-        step_type = step.get('type')
-        content = step.get('content')
+    
+    if bracketed_paste:
+        # For bracketed paste, strip trailing newlines and send Enter separately
+        text_to_paste = text.rstrip('\r\n')
+        # Claude! This variable is assigned but never used, whereas vim-slime does use it.
+        has_newline = len(text) != len(text_to_paste)
+    else:
+        # For non-bracketed paste (Python < 3.13), send text as-is
+        # The Python escape function already handles proper formatting
+        text_to_paste = text
+        # Claude! This variable is assigned but never used, whereas vim-slime does use it.
+        has_newline = False  # Don't send Enter separately
+    
+    
+    if not text_to_paste:
+        return
+    
+    # Cancel any existing command first (only need to do this once)
+    subprocess.run(
+        ["tmux", "send-keys", "-X", "-t", target_id, "cancel"],
+        capture_output=True
+    )
+    
+    # Determine paste command based on bracketed paste mode
+    paste_cmd = ["tmux", "paste-buffer", "-d"]
+    if bracketed_paste:
+        paste_cmd.append("-p")
+    paste_cmd.extend(["-t", target_id])
+    
+    if chunk_size:
+        # Send text in chunks (vim-slime uses 1000 character chunks)
+        for i in range(0, len(text_to_paste), chunk_size):
+            chunk = text_to_paste[i:i + chunk_size]
+            
+            
+            # Load chunk into buffer
+            subprocess.run(
+                ["tmux", "load-buffer", "-"],
+                input=chunk,
+                text=True,
+                check=True
+            )
+            
+            # Paste buffer
+            subprocess.run(paste_cmd, check=True)
+    else:
+        # Send all text at once
         
-        if step_type == 'delay':
-            time.sleep(content)
-        elif step_type == 'command':
-            # Send the command
-            subprocess.run(
-                ["tmux", "send-keys", "-t", target_id, content],
-                check=True
-            )
-            # Send Enter
-            subprocess.run(
-                ["tmux", "send-keys", "-t", target_id, "Enter"],
-                check=True
-            )
-            # Wait if requested
-            if step.get('wait_for_prompt', True):
-                time.sleep(0.15)
-        elif step_type == 'text':
-            # Send the text directly
-            subprocess.run(
-                ["tmux", "send-keys", "-t", target_id, content],
-                check=True
-            )
-            # Wait if requested
-            if step.get('wait_for_prompt', False):
-                time.sleep(0.15)
-        elif step_type == 'keypress':
-            # Send a single key
-            subprocess.run(
-                ["tmux", "send-keys", "-t", target_id, content],
-                check=True
-            )
-        elif step_type == 'bracketed_paste':
-            send_with_bracketed_paste(target_id, content)
+        subprocess.run(
+            ["tmux", "load-buffer", "-"],
+            input=text_to_paste,
+            text=True,
+            check=True
+        )
+        
+        # Paste buffer
+        subprocess.run(paste_cmd, check=True)
+    
+    # Send Enter key to execute the code
+    # Repot always sends Enter because its purpose is to send code for execution
+    # This differs from vim-slime which only sends Enter if text had trailing newline
+    subprocess.run(
+        ["tmux", "send-keys", "-t", target_id, "Enter"],
+        check=True
+    )
+    
+    # For bracketed paste, send another Enter to execute code blocks
+    # Python REPLs need a blank line after indented blocks
+    if bracketed_paste:
+        subprocess.run(
+            ["tmux", "send-keys", "-t", target_id, "Enter"],
+            check=True
+        )
 
 
 def send_with_bracketed_paste(target_id: str, text: str) -> None:
     """Send text using bracketed paste mode.
     
     This is the preferred method for REPLs that support it.
+    Uses vim-slime's approach: load-buffer + paste-buffer with -p flag.
     
     Args:
         target_id: The target tmux pane ID.
         text: The text to send.
     """
-    # For large content, use buffer method
-    if len(text) > 500:
-        send_with_buffer(target_id, text)
-        return
-    
-    # Ensure exactly one trailing newline
-    text = text.rstrip() + '\n'
-    
-    # Send the bracketed paste sequence
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, BRACKETED_PASTE_START],
-        check=True
-    )
-    
-    # Send the text content
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, text],
-        check=True
-    )
-    
-    # End bracketed paste
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, BRACKETED_PASTE_END],
-        check=True
-    )
-    
-    # Allow time for processing
-    time.sleep(0.2)
-    
-    # Send Enter to execute
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, "Enter"],
-        check=True
-    )
+    _send_to_tmux(target_id, text, bracketed_paste=True)
 
 
-def send_with_buffer(target_id: str, text: str) -> None:
+def send_with_buffer(target_id: str, text: str, bracketed_paste: bool = True) -> None:
     """Send text using tmux's load-buffer and paste-buffer commands.
     
-    This method is better for longer texts or texts with special characters.
+    This method is used for longer texts. Follows vim-slime's chunking approach.
     
     Args:
         target_id: The ID of the target tmux pane.
         text: The text to send.
+        bracketed_paste: Whether to use bracketed paste mode.
     """
-    # Make sure the text is properly formatted
-    text = text.rstrip() + '\n'
-        
-    # Create a temporary file
-    with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as temp:
-        temp.write(text)
-        temp.flush()
-        
-        # Load the buffer from the file
-        subprocess.run(
-            ["tmux", "load-buffer", temp.name],
-            check=True
-        )
+    # vim-slime uses 1000 character chunks
+    _send_to_tmux(target_id, text, bracketed_paste=bracketed_paste, chunk_size=1000)
+
+
+def send_without_bracketed_paste(target_id: str, text: str) -> None:
+    """Send text without using bracketed paste.
     
-    # Use bracketed paste mode with the buffer
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, BRACKETED_PASTE_START],
-        check=True
-    )
+    This method is designed specifically for Python REPL < 3.13 which doesn't 
+    support bracketed paste. Uses vim-slime's approach: paste-buffer without -p flag.
     
-    # Paste the buffer
-    subprocess.run(
-        ["tmux", "paste-buffer", "-t", target_id],
-        check=True
-    )
-    
-    # End bracketed paste mode
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, BRACKETED_PASTE_END],
-        check=True
-    )
-    
-    # Allow time for processing
-    time.sleep(0.3)
-    
-    # Send Enter to execute
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, "Enter"],
-        check=True
-    )
+    Args:
+        target_id: The target tmux pane ID.
+        text: The text to send.
+    """
+    _send_to_tmux(target_id, text, bracketed_paste=False)
+
+
+# Register the tmux target
+TARGETS['tmux'] = TmuxTarget

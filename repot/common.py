@@ -1,13 +1,13 @@
 """Common utilities for language and target interfaces."""
 
-from typing import Dict, Any
+import typing as T
 
 
 class SendingStep:
     """Factory functions for creating sending steps."""
     
     @staticmethod
-    def command(content: str, wait_for_prompt: bool = True) -> Dict[str, Any]:
+    def command(content: str, wait_for_prompt: bool = True) -> dict[str, T.Any]:
         """Create a command sending step.
         
         Args:
@@ -24,7 +24,7 @@ class SendingStep:
         }
     
     @staticmethod
-    def text(content: str, wait_for_prompt: bool = False) -> Dict[str, Any]:
+    def text(content: str, wait_for_prompt: bool = False) -> dict[str, T.Any]:
         """Create a text sending step.
         
         Args:
@@ -41,7 +41,7 @@ class SendingStep:
         }
     
     @staticmethod
-    def bracketed_text(content: str) -> Dict[str, Any]:
+    def bracketed_text(content: str) -> dict[str, T.Any]:
         """Create a bracketed paste text sending step.
         
         Args:
@@ -56,7 +56,7 @@ class SendingStep:
         }
     
     @staticmethod
-    def delay(seconds: float) -> Dict[str, Any]:
+    def delay(seconds: float) -> dict[str, T.Any]:
         """Create a delay step.
         
         Args:
@@ -71,7 +71,7 @@ class SendingStep:
         }
     
     @staticmethod
-    def keypress(key: str) -> Dict[str, Any]:
+    def keypress(key: str) -> dict[str, T.Any]:
         """Create a keypress step.
         
         Args:
