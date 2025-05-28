@@ -44,21 +44,7 @@ class TmuxTarget:
         if not text:
             return
 
-        
-        # Decide which method to use based on configuration and text length
-        if config.use_bracketed_paste:
-            if len(text) > 500:
-                send_with_buffer(config.pane_id, text, bracketed_paste=True)
-            else:
-                send_with_bracketed_paste(config.pane_id, text)
-        else:
-            # For non-bracketed paste, send as a single block
-            # The language escape function has already formatted the text properly
-            if len(text) > 500:
-                # Use chunking for long text even without bracketed paste
-                send_with_buffer(config.pane_id, text, bracketed_paste=False)
-            else:
-                send_without_bracketed_paste(config.pane_id, text)
+        _send_to_tmux(config.pane_id, text, bracketed_paste=config.use_bracketed_paste)
 
 
 def get_current_pane() -> str:
@@ -92,7 +78,7 @@ def get_next_pane() -> Optional[str]:
     return target if target != current else None
 
 
-def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool, chunk_size: Optional[int] = None) -> None:
+def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool) -> None:
     """Common implementation for sending text to tmux.
     
     This follows vim-slime's approach exactly:
@@ -109,22 +95,18 @@ def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool, chunk_size: 
         bracketed_paste: Whether to use bracketed paste mode (-p flag).
         chunk_size: If provided, send text in chunks of this size.
     """
-    
     if bracketed_paste:
-        # For bracketed paste, strip trailing newlines and send Enter separately
+        # For bracketed paste, strip trailing newlines and track if we need Enter
         text_to_paste = text.rstrip('\r\n')
-        # Claude! This variable is assigned but never used, whereas vim-slime does use it.
         has_newline = len(text) != len(text_to_paste)
     else:
-        # For non-bracketed paste (Python < 3.13), send text as-is
-        # The Python escape function already handles proper formatting
+        # For non-bracketed paste, send text as-is (already processed by language)
         text_to_paste = text
-        # Claude! This variable is assigned but never used, whereas vim-slime does use it.
         has_newline = False  # Don't send Enter separately
-    
-    
     if not text_to_paste:
         return
+    
+    print(f"{text_to_paste=}")
     
     # Cancel any existing command first (only need to do this once)
     subprocess.run(
@@ -138,90 +120,39 @@ def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool, chunk_size: 
         paste_cmd.append("-p")
     paste_cmd.extend(["-t", target_id])
     
-    if chunk_size:
+    chunk_size = 1000  # borrow vim-slime hardcoded value
         # Send text in chunks (vim-slime uses 1000 character chunks)
-        for i in range(0, len(text_to_paste), chunk_size):
-            chunk = text_to_paste[i:i + chunk_size]
-            
-            
-            # Load chunk into buffer
-            subprocess.run(
-                ["tmux", "load-buffer", "-"],
-                input=chunk,
-                text=True,
-                check=True
-            )
-            
-            # Paste buffer
-            subprocess.run(paste_cmd, check=True)
-    else:
-        # Send all text at once
+    for i in range(0, len(text_to_paste), chunk_size):
+        chunk = text_to_paste[i:i + chunk_size]
         
+        # Load chunk into buffer
         subprocess.run(
             ["tmux", "load-buffer", "-"],
-            input=text_to_paste,
+            input=chunk,
             text=True,
             check=True
         )
         
         # Paste buffer
         subprocess.run(paste_cmd, check=True)
+
     
     # Send Enter key to execute the code
     # Repot always sends Enter because its purpose is to send code for execution
     # This differs from vim-slime which only sends Enter if text had trailing newline
-    subprocess.run(
-        ["tmux", "send-keys", "-t", target_id, "Enter"],
-        check=True
-    )
-    
-    # For bracketed paste, send another Enter to execute code blocks
-    # Python REPLs need a blank line after indented blocks
     if bracketed_paste:
         subprocess.run(
             ["tmux", "send-keys", "-t", target_id, "Enter"],
             check=True
         )
 
-
-def send_with_bracketed_paste(target_id: str, text: str) -> None:
-    """Send text using bracketed paste mode.
-    
-    This is the preferred method for REPLs that support it.
-    Uses vim-slime's approach: load-buffer + paste-buffer with -p flag.
-    
-    Args:
-        target_id: The target tmux pane ID.
-        text: The text to send.
-    """
-    _send_to_tmux(target_id, text, bracketed_paste=True)
-
-
-def send_with_buffer(target_id: str, text: str, bracketed_paste: bool = True) -> None:
-    """Send text using tmux's load-buffer and paste-buffer commands.
-    
-    This method is used for longer texts. Follows vim-slime's chunking approach.
-    
-    Args:
-        target_id: The ID of the target tmux pane.
-        text: The text to send.
-        bracketed_paste: Whether to use bracketed paste mode.
-    """
-    # vim-slime uses 1000 character chunks
-    _send_to_tmux(target_id, text, bracketed_paste=bracketed_paste, chunk_size=1000)
-
-
-def send_without_bracketed_paste(target_id: str, text: str) -> None:
-    """Send text without using bracketed paste.
-    
-    This method is designed specifically for Python REPL < 3.13 which doesn't 
-    support bracketed paste. Uses vim-slime's approach: paste-buffer without -p flag.
-    
-    Args:
-        target_id: The target tmux pane ID.
-        text: The text to send.
-    """
-    _send_to_tmux(target_id, text, bracketed_paste=False)
+    # Can only be True if bracketed_paste is True
+    print(f"{has_newline=}")
+    if has_newline:
+        subprocess.run(
+            ["tmux", "send-keys", "-t", target_id, "Enter"],
+            check=True
+        )
 
 
 # Register the tmux target

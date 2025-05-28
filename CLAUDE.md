@@ -76,26 +76,38 @@ Python REPLs have different capabilities:
 #### Critical Implementation Notes
 
 1. **Language Registration**: Language modules must be imported in `__init__.py` to register themselves
-2. **Text Processing Order**: 
-   - Language processor handles code formatting (e.g., removing blank lines)
+
+2. **Text Processing**: 
+   - Language processor handles ALL code formatting using vim-slime's Python preprocessing
+   - Same preprocessing applies to BOTH bracketed and non-bracketed paste modes
    - Target (tmux) sends text exactly as received from language processor
-   - For non-bracketed paste, text is NOT modified by the target
-3. **Enter Key Behavior**:
-   - Bracketed paste: Always sends TWO Enter keys (Python REPLs need blank line to execute indented blocks)
-   - Non-bracketed paste: Always sends ONE Enter key to execute Python code blocks
-   - This differs from vim-slime which only sends Enter if text had trailing newline
+   
+3. **Python Preprocessing Steps**:
+   - Remove ALL blank lines (prevents premature execution in Python REPL)
+   - Dedent the code
+   - Add blank lines between indented and unindented sections (except elif/else/except/finally)
+   - Calculate trailing newlines based on code structure:
+     - Indented last line → 2 newlines
+     - Single-line block definitions (e.g., `def foo(): ...`) → 2 newlines
+     - Simple statements → 1 newline
+
+4. **Enter Key Behavior for Bracketed Paste**:
+   - Tmux strips trailing newlines from preprocessed text
+   - Sends Enter key separately only if trailing newlines were present
+   - This matches vim-slime's bracketed paste behavior exactly
 
 #### Implementation Status
 
 The implementation is fully functional for both Python REPL modes:
 
-- **Python < 3.13** (`--py --no-bpaste`): Successfully removes all blank lines to prevent premature execution, handles class definitions and complex indented blocks correctly
-- **Python >= 3.13, IPython, ptpython** (`--py`): Uses bracketed paste with two Enter keys for proper code block execution
+- **Python < 3.13** (`--py --no-bpaste`): Non-bracketed paste mode with smart newline handling
+- **Python >= 3.13, IPython, ptpython** (`--py`): Bracketed paste mode with same preprocessing
 
 Key discoveries during implementation:
 - Python REPLs interpret ANY blank line as "end of indented block", causing premature execution
-- Even with bracketed paste, Python REPLs remain in continuation mode (`...`) after pasting and need a blank line (two Enter keys) to execute
-- The tmux `paste-buffer` command without `-p` flag works correctly for non-bracketed paste when combined with proper text preprocessing
+- Different code structures require different numbers of trailing newlines for proper execution
+- Vim-slime applies the SAME Python preprocessing regardless of bracketed paste mode
+- The regex pattern for adding newlines between sections is critical: `(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))`
 
 Vim-slime's approach is the reference implementation. Follow it exactly rather than inventing new solutions.
 
@@ -172,3 +184,5 @@ Key design principles:
 - Do not needlessly complicate things.
 - Tests should be located in tests/
 - Use pytest for tests.
+
+- do not add indirection unless it serves a clear and explainable purpose

@@ -22,6 +22,7 @@ def escape_text(text: str, language: str, config: dict[str, T.Any]) -> list[Piec
     Returns:
         List of pieces to send in sequence.
     """
+    print(f"{text=}")
     if language not in LANGUAGES:
         # If the language isn't registered, return the text as is
         return [Piece.text(text)]
@@ -52,6 +53,9 @@ def send(
         raise ValueError(f"Unknown target: {target}")
     
     target_impl = T.cast(Target, TARGETS[target])
+
+    print(f"{text=}")
+    print("---")
     
     # Escape the text for the specific language
     pieces = escape_text(text, language, language_config)

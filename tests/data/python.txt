@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+a = 10
+
 @dataclass  # mark class as a dataclass
 class Person:
     name: str
@@ -44,3 +46,12 @@ def hello_world():
     for i in range(4):
         print("hello world")
 
+def hello_world(): ...
+
+try:
+    print("hi")
+except:
+    pass
+
+
+a = 2

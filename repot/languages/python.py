@@ -9,19 +9,20 @@ This module handles Python-specific text escaping for different REPL types:
 
 import re
 import typing as T
+import textwrap
 
 from repot.languages.interface import LANGUAGES, Piece
 
 
 class PythonLanguage:
     """Python language implementation."""
-    
+
     @staticmethod
     def escape_text(text: str, config: dict[str, T.Any]) -> list[Piece]:
         """Escape Python code for sending to a REPL.
-        
+
         This implementation is based on vim-slime's python ftplugin handler.
-        
+
         Args:
             text: The Python code to escape.
             config: Configuration for Python.
@@ -29,98 +30,91 @@ class PythonLanguage:
                 use_cpaste: Whether to use %cpaste with IPython.
                 ipython_pause: Milliseconds to pause after sending %cpaste.
                 use_bracketed_paste: Whether to use bracketed paste.
-            
+
         Returns:
             List of text pieces to send.
         """
-        # Process the text to handle indentation, etc.
-        processed_text = preprocess_code(text)
-        
+
+        # Normalize newlines
+        text = text.replace("\r\n", "\n")
+
         # Check if we're using IPython with %cpaste
-        if config.get('use_ipython') and config.get('use_cpaste') and len(processed_text.splitlines()) > 1:
+        if (
+            config.get("use_ipython")
+            and config.get("use_cpaste")
+            and len(text.splitlines()) > 1
+        ):
             return [
-                Piece.text("%cpaste -q\n"), 
-                Piece.delay(config.get('ipython_pause', 100)),  # Delay in milliseconds
-                Piece.text(processed_text), 
-                Piece.text("--\n")
+                Piece.text("%cpaste -q\n"),
+                Piece.delay(config.get("ipython_pause", 100)),  # Delay in milliseconds
+                Piece.text(text),
+                Piece.text("--\n"),
             ]
-        
-        # For standard Python without bracketed paste (< 3.13)
-        # we need to process code differently
-        use_bracketed_paste = config.get('use_bracketed_paste', True)
-        if not use_bracketed_paste:
-            return prepare_python_blocks(processed_text)
-        
-        # For Python with bracketed paste or other REPLs
-        return [Piece.text(processed_text)]
 
-
-def preprocess_code(text: str) -> str:
-    """Preprocess Python code.
-    
-    Args:
-        text: The Python code to preprocess.
-        
-    Returns:
-        Preprocessed code ready for pasting.
-    """
-    # Ensure consistent line endings
-    text = text.replace('\r\n', '\n')
-    
-    # Don't use textwrap.dedent here - we handle dedenting in prepare_python_blocks
-    # to match vim-slime's behavior exactly
-    
-    return text
+        # Apply Python preprocessing regardless of bracketed paste mode
+        # This matches vim-slime's behavior
+        return prepare_python_blocks(text)
 
 
 def prepare_python_blocks(text: str) -> list[Piece]:
-    """Prepare Python code for non-bracketed paste.
-    
-    This is a direct Python translation of vim-slime's _EscapeText_python function.
-    Essential for Python < 3.13 which doesn't support bracketed paste.
-    
+    """Prepare Python code for sending to REPL.
+
+    This implements vim-slime's approach for Python < 3.13 REPLs:
+    1. Remove all blank lines (Python REPL treats them as "end of block")
+    2. Dedent the code
+    3. Add blank lines between indented and unindented sections (except for certain keywords)
+    4. Ensure proper number of trailing newlines based on code structure
+
     Args:
         text: The preprocessed Python code.
-        
+
     Returns:
         List of text pieces to send.
     """
-    # Direct translation of vim-slime's approach:
-    # 1. Remove ALL empty lines completely
-    # Vim: let empty_lines_pat = '\(^\|\n\)\zs\(\s*\n\+\)\+'
-    # This removes all lines that contain only whitespace or are empty
-    # Critical for Python REPL which treats blank lines as "end of block"
-    no_empty_lines = '\n'.join(line for line in text.split('\n') if line.strip())
+    # Step 1: Remove ALL empty lines
+    # This is critical because Python REPL interprets blank lines as "end of block"
+    lines = text.split("\n")
+    no_empty_lines = "\n".join(line for line in lines if line.strip())
+
+    # Step 2: Dedent the code
+    dedented_lines = textwrap.dedent(no_empty_lines)
     
-    # 2. Find common indentation from the first line
-    # Vim: matchstr(no_empty_lines, '^\s*')
-    first_indent_match = re.match(r'^[ \t]*', no_empty_lines)
-    common_indent = first_indent_match.group(0) if first_indent_match else ""
+    # Step 3: Add newlines between indented and unindented lines
+    # This helps REPL understand where blocks end
+    # Pattern: indented line followed by unindented line (excluding elif/else/except/finally)
+    add_eol_pat = r"(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))"
+    result = re.sub(add_eol_pat, r"\1\n", dedented_lines)
     
-    # 3. Remove common indentation from all lines
-    # Vim: let dedent_pat = '\(^\|\n\)\zs'.matchstr(no_empty_lines, '^\s*')
-    if common_indent:
-        # Match (start or newline) + common indent
-        dedent_pat = r'(^|\n)' + re.escape(common_indent)
-        dedented_lines = re.sub(dedent_pat, r'\1', no_empty_lines)
-    else:
-        dedented_lines = no_empty_lines
+    # Step 4: Determine how many trailing newlines we need
+    # Check if the last non-empty line is indented or if we have block-starting keywords
+    result_lines = result.split('\n')
     
-    # 4. Add extra newline after indented lines that are followed by unindented lines
-    # Vim: let except_pat = '\(elif\|else\|except\|finally\)\@!'
-    #      let add_eol_pat = '\n\s[^\n]\+\n\zs\ze\('.except_pat.'\S\|$\)'
-    # This adds a blank line to signal end of indented block
-    add_eol_pat = r'(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))'
-    result = re.sub(add_eol_pat, r'\1\n', dedented_lines)
+    # Remove trailing empty lines for analysis
+    while result_lines and not result_lines[-1].strip():
+        result_lines.pop()
     
-    # Claude! Double check whether this if-block appears in the vim-slime implementation.
-    # Ensure ends with newline for execution
-    # if not result.endswith('\n'):
-    #     result += '\n'
+    needs_double_newline = False
+    if result_lines:
+        last_line = result_lines[-1]
+        # Check if last line is indented
+        if last_line and last_line[0] in ' \t':
+            needs_double_newline = True
+        else:
+            # Check if we have a single-line block definition
+            first_line = next((line.strip() for line in result_lines if line.strip()), '')
+            if re.match(r'^(def|class|if|elif|else|for|while|with|try|except|finally)\b.*:\s*\.\.\.\s*$', first_line):
+                needs_double_newline = True
+    
+    # Ensure proper trailing newlines
+    if not result.endswith('\n'):
+        result += '\n'
+    
+    if needs_double_newline:
+        result += '\n'
     
     # Return the prepared text
     return [Piece.text(result)]
 
 
 # Register the Python language
-LANGUAGES['python'] = PythonLanguage
+LANGUAGES["python"] = PythonLanguage
