@@ -78,11 +78,12 @@ Python REPLs have different capabilities:
 1. **Language Registration**: Language modules must be imported in `__init__.py` to register themselves
 
 2. **Text Processing**: 
-   - Language processor handles ALL code formatting using vim-slime's Python preprocessing
-   - Same preprocessing applies to BOTH bracketed and non-bracketed paste modes
+   - Language processor handles code formatting based on paste mode
    - Target (tmux) sends text exactly as received from language processor
    
-3. **Python Preprocessing Steps**:
+3. **Python Preprocessing**:
+   
+   **For Non-Bracketed Paste (Python < 3.13)**:
    - Remove ALL blank lines (prevents premature execution in Python REPL)
    - Dedent the code
    - Add blank lines between indented and unindented sections (except elif/else/except/finally)
@@ -90,11 +91,15 @@ Python REPLs have different capabilities:
      - Indented last line → 2 newlines
      - Single-line block definitions (e.g., `def foo(): ...`) → 2 newlines
      - Simple statements → 1 newline
+   
+   **For Bracketed Paste (Python >= 3.13)**:
+   - Preserve all blank lines (REPL handles them correctly with bracketed paste)
+   - Ensure code always ends with exactly ONE newline
+   - This simplifies maintenance as all targets only need to send one Enter key
 
-4. **Enter Key Behavior for Bracketed Paste**:
-   - Tmux strips trailing newlines from preprocessed text
-   - Sends Enter key separately only if trailing newlines were present
-   - This matches vim-slime's bracketed paste behavior exactly
+4. **Enter Key Behavior**:
+   - Bracketed paste: Send exactly one Enter key (code already ends with one newline)
+   - Non-bracketed paste: No Enter key sent (newlines already included in text)
 
 #### Implementation Status
 
@@ -106,7 +111,8 @@ The implementation is fully functional for both Python REPL modes:
 Key discoveries during implementation:
 - Python REPLs interpret ANY blank line as "end of indented block", causing premature execution
 - Different code structures require different numbers of trailing newlines for proper execution
-- Vim-slime applies the SAME Python preprocessing regardless of bracketed paste mode
+- Bracketed paste allows preservation of blank lines, improving code readability
+- Standardizing on one trailing newline for bracketed paste simplifies multi-target support
 - The regex pattern for adding newlines between sections is critical: `(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))`
 
 Vim-slime's approach is the reference implementation. Follow it exactly rather than inventing new solutions.

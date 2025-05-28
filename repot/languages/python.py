@@ -7,7 +7,9 @@ This module handles Python-specific text escaping for different REPL types:
 - ptpython: Uses bracketed paste
 """
 
+from locale import format_string
 import re
+from stat import FILE_ATTRIBUTE_INTEGRITY_STREAM
 import typing as T
 import textwrap
 
@@ -51,39 +53,51 @@ class PythonLanguage:
                 Piece.text("--\n"),
             ]
 
-        # Apply Python preprocessing regardless of bracketed paste mode
-        # This matches vim-slime's behavior
-        return prepare_python_blocks(text)
+        # Apply Python preprocessing based on bracketed paste mode
+        use_bracketed_paste = config.get("use_bracketed_paste", True)
+        return prepare_python_blocks(text, use_bracketed_paste)
 
 
-def prepare_python_blocks(text: str) -> list[Piece]:
+def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[Piece]:
     """Prepare Python code for sending to REPL.
 
-    This implements vim-slime's approach for Python < 3.13 REPLs:
+    For non-bracketed paste (Python < 3.13):
     1. Remove all blank lines (Python REPL treats them as "end of block")
     2. Dedent the code
-    3. Add blank lines between indented and unindented sections (except for certain keywords)
+    3. Add blank lines between indented and unindented sections
     4. Ensure proper number of trailing newlines based on code structure
 
+    For bracketed paste (Python >= 3.13):
+    1. Keep blank lines (REPL can handle them with bracketed paste)
+    2. Ensure code always ends with exactly one newline
+
     Args:
-        text: The preprocessed Python code.
+        text: The Python code to process.
+        use_bracketed_paste: Whether bracketed paste is enabled.
 
     Returns:
         List of text pieces to send.
     """
+
+    text = text.strip("\r\n")
+    # Dedent the code
+    dedented_text = textwrap.dedent(text)
+
+    # Non-bracketed paste mode - apply full preprocessing
     # Step 1: Remove ALL empty lines
     # This is critical because Python REPL interprets blank lines as "end of block"
-    lines = text.split("\n")
+    lines = dedented_text.split("\n")
     no_empty_lines = "\n".join(line for line in lines if line.strip())
 
-    # Step 2: Dedent the code
-    dedented_lines = textwrap.dedent(no_empty_lines)
+    # dedented_lines = no_empty_lines
     
     # Step 3: Add newlines between indented and unindented lines
     # This helps REPL understand where blocks end
     # Pattern: indented line followed by unindented line (excluding elif/else/except/finally)
-    add_eol_pat = r"(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))"
-    result = re.sub(add_eol_pat, r"\1\n", dedented_lines)
+    # add_eol_pat = r"(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))"
+    # result = re.sub(add_eol_pat, r"\1\n", dedented_lines)
+
+    result = no_empty_lines
     
     # Step 4: Determine how many trailing newlines we need
     # Check if the last non-empty line is indented or if we have block-starting keywords
@@ -111,7 +125,16 @@ def prepare_python_blocks(text: str) -> list[Piece]:
     
     if needs_double_newline:
         result += '\n'
-    
+
+    print(f"{needs_double_newline=}")
+
+    if use_bracketed_paste:
+        # For bracketed paste, we can keep blank lines
+        # Just ensure the code ends with exactly one newline
+        if needs_double_newline:
+            dedented_text = dedented_text + '\n'
+        return [Piece.text(dedented_text)]
+  
     # Return the prepared text
     return [Piece.text(result)]
 

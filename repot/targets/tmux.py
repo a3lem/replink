@@ -95,18 +95,20 @@ def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool) -> None:
         bracketed_paste: Whether to use bracketed paste mode (-p flag).
         chunk_size: If provided, send text in chunks of this size.
     """
-    if bracketed_paste:
-        # For bracketed paste, strip trailing newlines and track if we need Enter
-        text_to_paste = text.rstrip('\r\n')
-        has_newline = len(text) != len(text_to_paste)
-    else:
-        # For non-bracketed paste, send text as-is (already processed by language)
-        text_to_paste = text
-        has_newline = False  # Don't send Enter separately
+    # if bracketed_paste:
+    #     # For bracketed paste, strip trailing newlines and track if we need Enter
+    #     text_to_paste = text.rstrip('\r\n')
+    #     has_newline = len(text) != len(text_to_paste)
+    # else:
+    #     # For non-bracketed paste, send text as-is (already processed by language)
+    #     text_to_paste = text
+    #     has_newline = False  # Don't send Enter separately
+
+    text_to_paste = text
+    print(f"{text_to_paste=}")
+    
     if not text_to_paste:
         return
-    
-    print(f"{text_to_paste=}")
     
     # Cancel any existing command first (only need to do this once)
     subprocess.run(
@@ -138,17 +140,10 @@ def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool) -> None:
 
     
     # Send Enter key to execute the code
-    # Repot always sends Enter because its purpose is to send code for execution
-    # This differs from vim-slime which only sends Enter if text had trailing newline
+    # For bracketed paste: always send exactly one Enter
+    # (Python preprocessing ensures code ends with exactly one newline)
+    # For non-bracketed paste: Enter is already included in the text
     if bracketed_paste:
-        subprocess.run(
-            ["tmux", "send-keys", "-t", target_id, "Enter"],
-            check=True
-        )
-
-    # Can only be True if bracketed_paste is True
-    print(f"{has_newline=}")
-    if has_newline:
         subprocess.run(
             ["tmux", "send-keys", "-t", target_id, "Enter"],
             check=True

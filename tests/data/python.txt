@@ -33,6 +33,11 @@ people = [
     Person("Judy", 70, "2223 Cedar St"),
 ]
 
+numbers = [
+    1,
+    3
+]
+
 
 n_people = len(people)
 person_name_lengths = [len(person.name) for person in people]
@@ -55,3 +60,10 @@ except:
 
 
 a = 2
+
+
+match True:
+    case False:
+        ...
+    case True:
+        ...
