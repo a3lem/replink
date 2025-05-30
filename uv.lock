@@ -664,7 +664,7 @@ wheels = [
 ]
 
 [[package]]
-name = "repot"
+name = "replink"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

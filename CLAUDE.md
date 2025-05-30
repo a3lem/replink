@@ -10,12 +10,11 @@ Claude does not waste time on niceties such as 'great question', nor do they apo
 
 Claude addresses the user as 'Adriaan'.
 
-## Project: REPOT
+## Project: replink
 
 ### About
 
-REPOT = 'Read Eval Print Over There'.
-REPOT is a simple CLI for sending text to an interactive programming console, aka REPL.
+replink is a simple CLI for sending text to an interactive programming console, aka REPL.
 
 Current scope:
 
@@ -37,23 +36,23 @@ How to use:
 
 ```bash
 # Pipe STDIN to `send`
-cat code.py | repot send -  # the `-` is optional.
+cat code.py | replink send -  # the `-` is optional.
 
 # Or pass code as argument
-repot send 'print("hello!")'
+replink send 'print("hello!")'
 ```
 
 Context:
 
-repot aims to provide the same functionality as [vim-slime](https://github.com/jpalardy/vim-slime), except without being tied to vim.
+replink aims to provide the same functionality as [vim-slime](https://github.com/jpalardy/vim-slime), except without being tied to vim.
 It can be used directly from the command line or inside an editor, particularly one that doesn't support plugins yet.
 
-I will be using repot inside the Helix editor (which is running inside Tmux), where I will be using it as follows:
+I will be using replink inside the Helix editor (which is running inside Tmux), where I will be using it as follows:
 
 1. Make visual line selection
-2. Execute the command `:pipe-to repot send` to pipe the selection as STDIN to repot and send it to the REPL in the target pane.
+2. Execute the command `:pipe-to replink send` to pipe the selection as STDIN to replink and send it to the REPL in the target pane.
 
-Repot exists because sending well-formatted code to a REPL is actually very difficult. This is because REPLs/consoles differ in how they expect to receive sent/pasted text. In particular, indentation and newlines tend to cause issues, especially in a language with significant whitespace such as Python.
+Replink exists because sending well-formatted code to a REPL is actually very difficult. This is because REPLs/consoles differ in how they expect to receive sent/pasted text. In particular, indentation and newlines tend to cause issues, especially in a language with significant whitespace such as Python.
 
 ### Implementation Details
 
@@ -128,13 +127,13 @@ Current implementation:
 Usage examples:
 ```bash
 # Python 3.13+, IPython, or ptpython (with bracketed paste)
-cat code.py | repot send --py
+cat code.py | replink send --py
 
 # Python 3.12 or below (without bracketed paste)
-cat code.py | repot send --py --no-bpaste
+cat code.py | replink send --py --no-bpaste
 
 # IPython with %cpaste
-cat code.py | repot send --py --ipy-cpaste
+cat code.py | replink send --py --ipy-cpaste
 ```
 
 ### Architecture
@@ -142,7 +141,7 @@ cat code.py | repot send --py --ipy-cpaste
 The codebase follows a clean separation of concerns:
 
 ```
-repot/
+replink/
 ├── cli.py          # CLI interface and argument parsing
 ├── core.py         # Orchestration between languages and targets
 ├── languages/      # Language-specific code processing
@@ -182,7 +181,7 @@ Key design principles:
 
 - Type hints are used consistently.
 - Do not import symbols from `typing`. Instead do `import typing as T` and refer to symbols as e.g. `T.Literal`.
-- Types are checked by running `basedpyright repot` from the project root. Warnings may be ignored.
+- Types are checked by running `basedpyright replink` from the project root. Warnings may be ignored.
 - Avoid extraneous dependencies by making use of the standard library.
 - Write modern Python. This CLI will not be used as a library. It is recommended to target recent Python language features.
    - This includes using generic types `dict` instead of `T.Dict`.
