@@ -8,6 +8,7 @@ from enum import Enum, auto, StrEnum
 import typing as T
 
 
+
 class PieceType(Enum):
     """Type of piece to send."""
 
@@ -48,16 +49,14 @@ class Piece:
 
 
 @T.runtime_checkable
-class LanguageProcessor(T.Protocol):
-    """Protocol for all languages."""
+class Language_P(T.Protocol):
+    """Protocol for all languages (must be dataclass)."""
 
-    @staticmethod
-    def escape_text(text: str, config: dict[str, T.Any]) -> list[Piece]:
+    def escape_text(self, text: str) -> list[Piece]:
         """Escape text for a specific language.
 
         Args:
             text: The text to escape.
-            config: Configuration for the language.
 
         Returns:
             List of pieces to send in sequence.
@@ -69,5 +68,3 @@ class Language(StrEnum):
     PYTHON = "python"
 
 
-# Language registry
-LANGUAGES: dict[Language, LanguageProcessor] = {}

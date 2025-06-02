@@ -8,17 +8,23 @@ This module handles Python-specific text escaping for different REPL types:
 """
 
 import re
-import typing as T
 import textwrap
+from dataclasses import dataclass
 
-from replink.languages.interface import LANGUAGES, Piece, Language
+from replink.languages.common import Piece
 
 
+IPYTHON_PAUSE: int = 100
+
+
+@dataclass
 class PythonProcessor:
     """Python language implementation."""
 
-    @staticmethod
-    def escape_text(text: str, config: dict[str, T.Any]) -> list[Piece]:
+    use_bracketed_paste: bool = True
+    use_cpaste: bool = False
+
+    def escape_text(self, text: str) -> list[Piece]:
         """Escape Python code for sending to a REPL.
 
         This implementation is based on vim-slime's python ftplugin handler.
@@ -39,21 +45,16 @@ class PythonProcessor:
         text = text.replace("\r\n", "\n")
 
         # Check if we're using IPython with %cpaste
-        if (
-            config.get("use_ipython")
-            and config.get("use_cpaste")
-            and len(text.splitlines()) > 1
-        ):
+        if self.use_cpaste and len(text.splitlines()) > 1:
             return [
                 Piece.text("%cpaste -q\n"),
-                Piece.delay(config.get("ipython_pause", 100)),  # Delay in milliseconds
+                Piece.delay(IPYTHON_PAUSE),  # Delay in milliseconds
                 Piece.text(text),
                 Piece.text("--\n"),
             ]
 
         # Apply Python preprocessing based on bracketed paste mode
-        use_bracketed_paste = config.get("use_bracketed_paste", True)
-        return prepare_python_blocks(text, use_bracketed_paste)
+        return prepare_python_blocks(text, self.use_bracketed_paste)
 
 
 def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[Piece]:
@@ -140,7 +141,3 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
 
     # Return the prepared text
     return [Piece.text(result)]
-
-
-# Register the Python language
-LANGUAGES[Language.PYTHON] = PythonProcessor

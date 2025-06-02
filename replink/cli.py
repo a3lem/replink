@@ -5,11 +5,16 @@ import sys
 import typing as T
 
 from replink.core import send
-from replink.targets.interface import TARGETS
-from replink.targets.tmux import TmuxConfig
+from replink.languages.common import Language
+from replink.targets.common import (
+    SendOptions,
+    TargetType,
+    parse_target_config_str,
+    target_from_cfg_data,
+)
 
 
-def create_parser() -> argparse.ArgumentParser:
+def create_cli_parser() -> argparse.ArgumentParser:
     """Create the command line argument parser."""
     parser = argparse.ArgumentParser(
         prog="replink",
@@ -20,40 +25,54 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Send command
     send_parser = subparsers.add_parser(
-        "send", help="Send text to a REPL in a tmux pane"
+        "send", help="Send text to a REPL running in a different pane"
     )
     send_parser.add_argument(
         "text",
         nargs="?",
         default="-",
-        help="Text to send. Use '-' to read from stdin (default: -)"
+        help="Code to send. Use '-' to read from stdin (default: -)",
     )
-    
+
     # REPL type option
     send_parser.add_argument(
-        "--py",
-        action="store_true",
+        "-l",
+        "--lang",
+        dest="language",
+        choices=Language,
         required=True,
-        help="Send to Python REPL (python, ptpython, or ipython)"
+        help="Name of language to send (affects preprocessing)",
     )
-    
+
+    send_parser.add_argument(
+        "-t",
+        "--target",
+        required=True,
+        help="Target config, e.g. `tmux:p=1` ('use tmux, send to pane 1')",
+    )
+
     # Additional options (mutually exclusive)
     mode_group = send_parser.add_mutually_exclusive_group()
     mode_group.add_argument(
-        "--no-bpaste", '-N',
+        "-N",
+        "--no-bpaste",
         action="store_true",
-        help="Disable bracketed paste mode (required for Python < 3.13)"
+        help="Disable bracketed paste mode (required e.g. for builtin Python REPL < 3.13)",
     )
     mode_group.add_argument(
         "--ipy-cpaste",
         action="store_true",
-        help="Use IPython's %%cpaste command (IPython only)"
+        help="Special case. Use IPython's %%cpaste command (IPython only)",
     )
-    # 
+    #
     # Connect command (placeholder for future implementation)
-    connect_parser = subparsers.add_parser(
+
+    _ = subparsers.add_parser(
         "connect", help="Connect to a specific tmux pane (not implemented yet)"
     )
+    #
+    # Connect command (placeholder for future implementation)
+    _ = subparsers.add_parser("debug", help="Debug config (Not implemented yet)")
 
     return parser
 
@@ -69,32 +88,34 @@ def send_command(text: str, args: argparse.Namespace) -> int:
         Exit code (0 for success, non-zero for failure).
     """
     # Determine language configuration based on args
-    language = 'python'  # We only support Python for now
-    
+    language = args.language  # We only support Python for now
+    match language:
+        case Language.PYTHON:
+            from replink.languages.python import PythonProcessor
+
+            language = PythonProcessor(
+                use_bracketed_paste=not args.no_bpaste, use_cpaste=args.ipy_cpaste
+            )
+        case _:
+            raise ValueError(f"Unsupported language: {language}]")
+
+    # breakpoint()
+    target_name, target_cfg_data = parse_target_config_str(args.target)
+    match target_name:
+        case TargetType.TMUX:
+            from replink.targets.tmux import TmuxTarget
+
+            target = target_from_cfg_data(target_cfg_data, TmuxTarget)
+        case _:
+            raise ValueError(f"Unsupported target: {target_name}")
+
     # Check bracketed paste option
-    use_bracketed_paste = not args.no_bpaste
-    
-    language_config: dict[str, T.Any] = {
-        'use_cpaste': args.ipy_cpaste,
-        'ipython_pause': 100,  # 100ms pause for cpaste by default
-        'use_bracketed_paste': use_bracketed_paste,  # Pass the bracketed paste preference to language
-    }
-    
+    send_opts = SendOptions(use_bracketed_paste=not args.no_bpaste)
+
     # Create target configuration
     try:
         # For now, we only support tmux
-        target = 'tmux'
-        
-        # Get the target config using the target's config method
-        target_impl = TARGETS[target]
-        target_config = target_impl.config()
-        
-        # Update config with bracketed paste preference
-        if isinstance(target_config, TmuxConfig):
-            target_config.use_bracketed_paste = use_bracketed_paste
-        
-        # Send the text
-        send(text, target, target_config, language, language_config)
+        send(text, target, language, send_opts)
         return 0
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -103,7 +124,7 @@ def send_command(text: str, args: argparse.Namespace) -> int:
 
 def connect_command() -> int:
     """Execute the connect command (placeholder).
-    
+
     Returns:
         Exit code (0 for success, non-zero for failure).
     """
@@ -121,7 +142,7 @@ def main(argv: T.Optional[list[str]] = None) -> int:
     Returns:
         Exit code.
     """
-    parser = create_parser()
+    parser = create_cli_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     if args.command == "send":

@@ -1,40 +1,30 @@
 """Tmux target implementation."""
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
-from replink.targets.interface import TargetConfig, TARGETS
+from replink.targets.common import MetaK, SendOptions
 
 
 @dataclass
-class TmuxConfig(TargetConfig):
-    """Configuration for tmux target."""
-    pane_id: str
-    use_bracketed_paste: bool = True
-
-
 class TmuxTarget:
     """Tmux target implementation."""
-    
-    @staticmethod
-    def config() -> TmuxConfig:
+    pane_id: str = field(metadata={MetaK.ALIASES: ["pane", "p"], MetaK.EXAMPLES: ['0', 'right']})
+
+    def __post_init__(self):
         """Configure the tmux target.
         
         Currently, this automatically gets the pane to the right of the current pane.
         In the future, this could be expanded to allow selecting any pane.
-        
-        Returns:
-            TmuxConfig with the target pane ID.
         """
-        target_pane = get_next_pane()
-        if not target_pane:
-            raise ValueError("No pane found to the right of the current pane")
-        
-        return TmuxConfig(pane_id=target_pane)
+        if self.pane_id == "right":
+            target_pane = get_next_pane()
+            if not target_pane:
+                raise ValueError("No pane found to the right of the current pane")
+            self.pane_id = target_pane
     
-    @staticmethod
-    def send(config: TmuxConfig, text: str) -> None:
+    def send(self, text: str, opts: SendOptions) -> None:
         """Send text to a tmux pane.
         
         Args:
@@ -44,7 +34,7 @@ class TmuxTarget:
         if not text:
             return
 
-        _send_to_tmux(config.pane_id, text, bracketed_paste=config.use_bracketed_paste)
+        _send_to_tmux(self.pane_id, text, bracketed_paste=opts.use_bracketed_paste)
 
 
 def get_current_pane() -> str:
@@ -95,14 +85,6 @@ def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool) -> None:
         bracketed_paste: Whether to use bracketed paste mode (-p flag).
         chunk_size: If provided, send text in chunks of this size.
     """
-    # if bracketed_paste:
-    #     # For bracketed paste, strip trailing newlines and track if we need Enter
-    #     text_to_paste = text.rstrip('\r\n')
-    #     has_newline = len(text) != len(text_to_paste)
-    # else:
-    #     # For non-bracketed paste, send text as-is (already processed by language)
-    #     text_to_paste = text
-    #     has_newline = False  # Don't send Enter separately
 
     text_to_paste = text
     print(f"{text_to_paste=}")
@@ -150,5 +132,3 @@ def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool) -> None:
         )
 
 
-# Register the tmux target
-TARGETS['tmux'] = TmuxTarget
