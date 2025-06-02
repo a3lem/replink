@@ -36,10 +36,10 @@ How to use:
 
 ```bash
 # Pipe STDIN to `send`
-cat code.py | replink send -  # the `-` is optional.
+cat code.py | replink send -l python -t tmux:p=1 -  # the `-` is optional.
 
 # Or pass code as argument
-replink send 'print("hello!")'
+replink send -l python -t tmux:p=right --no-bpaste 'print("hello!")'
 ```
 
 Context:
@@ -74,7 +74,7 @@ Python REPLs have different capabilities:
 
 #### Critical Implementation Notes
 
-1. **Language Registration**: Language modules must be imported in `__init__.py` to register themselves
+1. **Language Registration**: Language modules are imported dynamically in CLI based on user selection
 
 2. **Text Processing**: 
    - Language processor handles code formatting based on paste mode
@@ -119,21 +119,22 @@ Vim-slime's approach is the reference implementation. Follow it exactly rather t
 ### CLI Interface
 
 Current implementation:
-- `--py` (required): Target Python REPL
-- `--no-bpaste`: Disable bracketed paste (required for Python < 3.13)
+- `-l/--lang` (required): Language to send (currently only `python`)
+- `-t/--target` (required): Target config, e.g. `tmux:p=right` or `tmux:p=1`
+- `-N/--no-bpaste`: Disable bracketed paste (required for Python < 3.13)
 - `--ipy-cpaste`: Use IPython's %cpaste command
 - `--no-bpaste` and `--ipy-cpaste` are mutually exclusive
 
 Usage examples:
 ```bash
 # Python 3.13+, IPython, or ptpython (with bracketed paste)
-cat code.py | replink send --py
+cat code.py | replink send --lang python --target tmux:p=right
 
 # Python 3.12 or below (without bracketed paste)
-cat code.py | replink send --py --no-bpaste
+cat code.py | replink send --lang python --target tmux:p=right --no-bpaste
 
 # IPython with %cpaste
-cat code.py | replink send --py --ipy-cpaste
+cat code.py | replink send --lang python --target tmux:p=right --ipy-cpaste
 ```
 
 ### Architecture
@@ -144,21 +145,23 @@ The codebase follows a clean separation of concerns:
 replink/
 ├── cli.py          # CLI interface and argument parsing
 ├── core.py         # Orchestration between languages and targets
+├── types.py        # Common types and protocols
 ├── languages/      # Language-specific code processing
-│   ├── interface.py   # Language protocol and Piece types
+│   ├── common.py      # Language protocol and Piece types
 │   ├── python.py      # Python REPL handling
-│   └── __init__.py    # MUST import language modules for registration
+│   └── __init__.py    # Language package
 └── targets/        # Target-specific sending mechanisms
-    ├── interface.py   # Target protocol
+    ├── common.py      # Target protocol and configuration parsing
     ├── tmux.py        # Tmux pane integration
-    └── __init__.py    # MUST import target modules for registration
+    └── __init__.py    # Target package
 ```
 
 Key design principles:
 - Languages handle text transformation (what to send)
 - Targets handle delivery mechanism (how to send)
 - Core orchestrates the flow without modifying data
-- Registration happens via module imports in `__init__.py` files
+- Dynamic imports in CLI based on user configuration
+- Clean separation using protocols and dataclasses
 
 
 ### Reference
@@ -189,5 +192,4 @@ Key design principles:
 - Do not needlessly complicate things.
 - Tests should be located in tests/
 - Use pytest for tests.
-
 - do not add indirection unless it serves a clear and explainable purpose
