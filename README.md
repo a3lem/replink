@@ -32,10 +32,11 @@ I built `replink` because I got used to sending Python code to a REPL early on i
 
 - Python
     + official/builtin
-        - For python3.12 and below, use `--no-bpaste/-N`.
+        - For python3.12 and *below*, use `--no-bpaste/-N`.
     + ipython
         - Special --ipy-cpaste command for `%cpaste` pasting (I rarely need this).
     + ptpython
+        - Behaves similarly to python3.13 and above.
 
 **Targets**:
 
