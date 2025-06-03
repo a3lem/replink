@@ -4,13 +4,7 @@ version = "0.1.0"
 description = "A simple CLI to send text to a Python REPL in a tmux pane"
 readme = "README.md"
 requires-python = ">=3.12"  # extend to lower versions?
-dependencies = [
-    "grip>=4.6.2",
-    "ipykernel>=6.29.5", # TODO: drop
-    "ipython>=9.2.0",
-    "tool>=0.8.0", # TODO: drop
-    "typing-extensions>=4.0.0",
-]
+dependencies = []
 
 [project.scripts]
 replink = "replink.cli:main"
