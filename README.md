@@ -44,6 +44,8 @@ I built `replink` because I got used to sending Python code to a REPL early on i
 
 Adding new languages and targets is straightforward. Any language or target available in [vim-slime](https://github.com/jpalardy/vim-slime) can be ported over. This is because `replink`'s architecture borrows heavily from vim-slime.
 
+FRs and PRs welcome!
+
 ## Install
 
 ### Using uv (recommended)
