@@ -59,7 +59,7 @@ uv tool install --python 3.12 replink
 ## Usage
 
 ```bash
-replink send -l LANGUAGE -t TARGET [OPTIONS] [TEXT]
+replink send -l LANGUAGE -t TARGET [OPTIONS] [TEXT/-]
 ```
 
 ### Examples
