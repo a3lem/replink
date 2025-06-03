@@ -98,11 +98,11 @@ cat script.py | replink send -l python -t tmux:p=right --ipy-cpaste
 Add to your `~/.config/helix/config.toml`:
 
 ```toml
-[keys.normal]
-"<space>x" = ":pipe-to replink send -l python -t tmux:p=right"
+[keys.normal."minus"]
+x = ":pipe-to replink send -l python -t tmux:p=right"
 ```
 
-Now you can select code and press `<space>x` to send it to your Python REPL.
+Now you can select code and press `<minus>x` to send it to your Python REPL. (I use minus/dash (`-`) as my leader for custom keybindings.)
 
 
 **Pro tip**: If you're building Helix from master, you can specify the language dynamically by passing it in as a [command line expansion](https://docs.helix-editor.com/master/command-line.html#expansions). For example:
