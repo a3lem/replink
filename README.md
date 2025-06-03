@@ -48,7 +48,7 @@ FRs and PRs welcome!
 
 ## Install
 
-### Using uv (recommended)
+### With uv (recommended)
 
 Use py 3.12 or greater.
 
