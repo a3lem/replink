@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from replink.targets.common import MetaK, SendOptions
+from replink.logging import logger
 
 
 @dataclass
@@ -87,7 +88,7 @@ def _send_to_tmux(target_id: str, text: str, bracketed_paste: bool) -> None:
     """
 
     text_to_paste = text
-    print(f"{text_to_paste=}")
+    logger.debug(f"{text_to_paste=}")
     
     if not text_to_paste:
         return

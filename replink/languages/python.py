@@ -12,6 +12,7 @@ import textwrap
 from dataclasses import dataclass
 
 from replink.languages.common import Piece
+from replink.logging import logger
 
 
 IPYTHON_PAUSE: int = 100
@@ -78,6 +79,8 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
         List of text pieces to send.
     """
 
+    logger.debug(f"raw text: {repr(text)}")
+
     text = text.strip("\r\n")
     # Dedent the code
     dedented_text = textwrap.dedent(text)
@@ -86,7 +89,9 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
     # Step 1: Remove ALL empty lines
     # This is critical because Python REPL interprets blank lines as "end of block"
     lines = dedented_text.split("\n")
-    no_empty_lines = "\n".join(line for line in lines if line.strip())
+    no_empty_lines_text = "\n".join(line for line in lines if line.strip())
+
+    has_medial_newlines = len(no_empty_lines_text )< len(dedented_text)
 
     # dedented_lines = no_empty_lines
 
@@ -96,15 +101,13 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
     # add_eol_pat = r"(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))"
     # result = re.sub(add_eol_pat, r"\1\n", dedented_lines)
 
-    result = no_empty_lines
-
     # Step 4: Determine how many trailing newlines we need
     # Check if the last non-empty line is indented or if we have block-starting keywords
-    result_lines = result.split("\n")
+    result_lines = no_empty_lines_text.split("\n")
 
     # Remove trailing empty lines for analysis
-    while result_lines and not result_lines[-1].strip():
-        result_lines.pop()
+    # while result_lines and not result_lines[-1].strip():
+    #     result_lines.pop()
 
     needs_double_newline = False
     if result_lines:
@@ -114,30 +117,26 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
             needs_double_newline = True
         else:
             # Check if we have a single-line block definition
+            # e.g. `def hello(): print("hello world!")`
             first_line = next(
                 (line.strip() for line in result_lines if line.strip()), ""
             )
             if re.match(
-                r"^(def|class|if|elif|else|for|while|with|try|except|finally)\b.*:\s*\.\.\.\s*$",
+                r"^(def|class|if|elif|else|for|while|with|try|except|finally|match|case)\b[^:\n]*:[^\n]+$",
                 first_line,
             ):
+                logger.debug("py double newline re patt matched.")
                 needs_double_newline = True
 
-    # Ensure proper trailing newlines
-    if not result.endswith("\n"):
-        result += "\n"
-
-    if needs_double_newline:
-        result += "\n"
-
-    print(f"{needs_double_newline=}")
-
     if use_bracketed_paste:
-        # For bracketed paste, we can keep blank lines
-        # Just ensure the code ends with exactly one newline
-        if needs_double_newline:
-            dedented_text = dedented_text + "\n"
-        return [Piece.text(dedented_text)]
+        result = dedented_text
+    else:
+        result = no_empty_lines_text
+        result += "\n"
 
-    # Return the prepared text
+    logger.debug(f"{needs_double_newline=}")
+
+    if needs_double_newline or has_medial_newlines:
+        result += "\n"
+
     return [Piece.text(result)]

@@ -1,8 +1,10 @@
+print("hello, world!")
+
 from dataclasses import dataclass
 
 a = 10
 
-@dataclass  # mark class as a dataclass
+@dataclass
 class Person:
     name: str
     age: int
@@ -67,3 +69,6 @@ match True:
         ...
     case True:
         ...
+
+
+def hello(): print("hello world!")

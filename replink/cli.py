@@ -3,6 +3,7 @@
 import argparse
 import sys
 import typing as T
+import logging
 
 from replink.core import send
 from replink.languages.common import Language
@@ -12,6 +13,7 @@ from replink.targets.common import (
     parse_target_config_str,
     target_from_cfg_data,
 )
+from replink.logging import logger
 
 
 def create_cli_parser() -> argparse.ArgumentParser:
@@ -19,6 +21,13 @@ def create_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="replink",
         description="Send text to a REPL in tmux",
+    )
+
+    # Add global debug flag
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
@@ -72,7 +81,7 @@ def create_cli_parser() -> argparse.ArgumentParser:
     )
     #
     # Connect command (placeholder for future implementation)
-    _ = subparsers.add_parser("debug", help="Debug config (Not implemented yet)")
+    _ = subparsers.add_parser("debug-target", help="Debug target string (Not implemented yet)")
 
     return parser
 
@@ -118,6 +127,7 @@ def send_command(text: str, args: argparse.Namespace) -> int:
         send(text, target, language, send_opts)
         return 0
     except Exception as e:
+        logger.debug(f"Error: {e}")
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
@@ -128,8 +138,7 @@ def connect_command() -> int:
     Returns:
         Exit code (0 for success, non-zero for failure).
     """
-    print("Connect command is not implemented yet.")
-    print("Currently, replink always sends to the pane to the right.")
+    logger.debug("Connect command is not implemented yet.")
     return 0
 
 
@@ -144,6 +153,17 @@ def main(argv: T.Optional[list[str]] = None) -> int:
     """
     parser = create_cli_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+
+    # Configure logging based on debug flag
+    if args.debug:
+        # Set up logging for replink logger only
+        logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.debug("Debug logging enabled")
 
     if args.command == "send":
         text = args.text

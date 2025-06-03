@@ -9,6 +9,7 @@ import typing as T
 
 from replink.targets.common import SendOptions, Target_P
 from replink.languages.common import Language_P, Piece, PieceType
+from replink.logging import logger
 
 
 def send(
@@ -28,6 +29,7 @@ def send(
     """
     # Escape the text for the specific language
     pieces: list[Piece] = language.escape_text(text)
+    logger.debug(f"{pieces=}")
 
     # Send each piece to the target
     for piece in pieces:
