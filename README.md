@@ -1,73 +1,68 @@
-# replink
-
-A CLI tool for sending code from your editor to a REPL running in tmux.
-
 ```text
 [>_] -> [>_]
 ```
 
-## Features
+# replink
 
-- **Python REPL support**: Works with standard Python, IPython, and ptpython
-- **Smart formatting**: Handles indentation, blank lines, and bracketed paste modes
-- **Tmux integration**: Send to any tmux pane with simple configuration
-- **Editor agnostic**: Works with any editor that can pipe text to commands
+`replink` is a CLI tool for piping code to a REPL running in a different pane.
 
-## Quick Start
+Handy when you want to evaluate code interactively, but your [favorite code editor](https://docs.helix-editor.com/master/) doesn't have a plugin system [(yet)](https://github.com/helix-editor/helix/pull/8675) but can [pipe selected text to a shell command](https://docs.helix-editor.com/commands.html#:~:text=the%20shell%20command.-,%3Apipe%2Dto,-Pipe%20each%20selection)!
 
-1. Install replink:
-   ```bash
-   uv tool install replink
-   ```
+## Demo
 
-2. Start a Python REPL in a tmux pane:
-   ```bash
-   python3  # or ipython, ptpython
-   ```
+[video link]
 
-3. Send code from your editor or command line:
-   ```bash
-   # From command line
-   echo 'print("hello world")' | replink send -l python -t tmux:p=right
-   
-   # From file
-   replink send -l python -t tmux:p=1 'x = 42\nprint(x)'
-   ```
+## Why?
 
-## Installation
+`replink` sends code from your editor to a REPL running elsewhere.
+
+**Example**: Python code to an IPython console inside a TMUX pane.
+
+Sound easy enough? The 'sending' part may be, but getting code to show up in the right format on arrival is tricky.
+
+As prior work like [vim-slime](https://github.com/jpalardy/vim-slime) figured out long ago, the solution lies in preprocessing code before sending it and accounting for whether the target expects [bracketed paste](https://cirw.in/blog/bracketed-paste) or not. To make things extra fun, each language and each REPL presents subtle edge cases.
+
+I built `replink` because I got used to sending Python code to a REPL early on in my career -- and Pycharm, VS Code, and Vim have all served to reinforce that habit. If I enjoyed maintaing a (Neo)vim config more, I would just use vim-slime or iron.nvim. But I like [**Helix**](https://docs.helix-editor.com/master/), even if it doesn't have a plugin system. It makes up for it though with its `:pipe-to` command, which lets you send-and-forget selected text as stdin to any shell command -- `replink`, in this case. Tell `replink` what you're sending ('language') and where it needs to go ('target'); bind the complete command to a Helix keybinding, and you nearly have something that feels like a plugin.
+
+## Languages & Targets
+
+`replink` supports these languages and targets:
+
+**Languages & REPLs**:
+
+- Python
+    + python3.12 and below (use --no-bpaste/-N); python3.13, ipython, ptpython
+
+**Targets**:
+
+- TMUX
+
+Adding new languages and targets is straightforward. Any language or target available in [vim-slime](https://github.com/jpalardy/vim-slime) can be ported over. This is because `replink`'s architecture borrows heavily from vim-slime.
+
+## Install
 
 ### Using uv (recommended)
-```bash
-uv tool install replink
-```
 
-### Using pip
-```bash
-pip install replink
-```
+Use py 3.12 or greater.
 
-### From source
 ```bash
-git clone https://github.com/yourusername/replink.git
-cd replink
-uv pip install -e .
+uv tool install --python 3.12 replink
 ```
 
 ## Usage
 
-### Basic Syntax
 ```bash
 replink send -l LANGUAGE -t TARGET [OPTIONS] [TEXT]
 ```
 
 ### Examples
 
-**Send to pane on the right:**
+**Send to TMUX pane on the right:**
 ```bash
 cat script.py | replink send -l python -t tmux:p=right
 ```
 
-**Send to specific pane:**
+**Send to TMUX pane with ID = 1** (`<prefix-key> q`)
 ```bash
 replink send -l python -t tmux:p=1 'print("hello")'
 ```
@@ -98,14 +93,21 @@ Add to your `~/.config/helix/config.toml`:
 ```toml
 [keys.normal]
 "<space>x" = ":pipe-to replink send -l python -t tmux:p=right"
-
-[keys.select]
-"<space>x" = ":pipe-to replink send -l python -t tmux:p=right"
 ```
 
 Now you can select code and press `<space>x` to send it to your Python REPL.
 
+
+**Pro tip**: If you're building Helix from master, you can specify the language dynamically by passing it in as a [command line expansion](https://docs.helix-editor.com/master/command-line.html#expansions). For example:
+
+```toml
+[keys.normal]
+"<space>x" = ":pipe-to replink send -l %{language} -t tmux:p=right"
+```
+
 ### Vim/Neovim
+
+I'm not sure why you would use `replink` in Vim, where better options exist. But here's what Claude has to say!
 
 ```vim
 " Send current line
@@ -132,40 +134,24 @@ Create a task in `.vscode/tasks.json`:
 }
 ```
 
-## Why replink?
+## Extending replink
 
-Sending code to a REPL seems simple, but getting the formatting right is surprisingly difficult. Python's significant whitespace, multiple REPL types, and varying bracketed paste support create numerous edge cases.
+Adding languages means implementing the `Language_P` protocol in `replink/languages/`. You handle the formatting quirks and REPL-specific behavior for your language.
 
-replink solves this by:
+Adding targets means implementing the `Target_P` protocol in `replink/targets/`. You handle the mechanics of getting text to wherever the REPL is running.
 
-- **Handling Python quirks**: Removes problematic blank lines for older Python versions
-- **Smart indentation**: Properly dedents and formats code blocks
-- **REPL awareness**: Adapts behavior based on bracketed paste support
-- **Following vim-slime**: Uses the battle-tested approach from vim-slime
+Right now there's just Python and tmux, but the design should make it straightforward to add JavaScript/Node, Ruby, R, or whatever. Same for targets like GNU Screen, Zellij, or terminal emulators with their own APIs.
 
-## How it Works
+## Contributing
 
-1. **Language processing**: Python code is analyzed and formatted based on the target REPL's capabilities
-2. **Target delivery**: Formatted code is sent to the specified tmux pane
-3. **Execution**: A final Enter key executes the code in the REPL
-
-For Python specifically:
-- **Python >= 3.13**: Uses bracketed paste, preserves blank lines
-- **Python < 3.13**: Removes blank lines, adds smart newlines between code blocks
-- **IPython**: Can use bracketed paste or %cpaste for complex code
-- **ptpython**: Uses bracketed paste
-
-## Limitations
-
-- **Languages**: Currently only supports Python (more languages planned)
-- **Targets**: Currently only supports tmux (screen, terminal apps planned)
-- **Dependencies**: Requires tmux to be installed and running
+PRs welcome, especially for new languages and targets. The architecture should make this pretty straightforward.
 
 ## Acknowledgments
 
-- **[vim-slime](https://github.com/jpalardy/vim-slime)**: The reference implementation for REPL integration
-- **[iron.nvim](https://github.com/Vigemus/iron.nvim)**: Additional inspiration for REPL tooling
+Heavily inspired by [vim-slime](https://github.com/jpalardy/vim-slime), which figured out all the hard parts years ago. (I've copied from this project liberally and have opted for the same license.) Also looked at [iron.nvim](https://github.com/Vigemus/iron.nvim) for ideas.
+
 
 ## License
 
 Licensed under the MIT License. See [LICENSE.txt](LICENSE.txt) for details.
+
