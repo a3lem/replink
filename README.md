@@ -31,8 +31,9 @@ I built `replink` because I got used to sending Python code to a REPL early on i
 **Languages & REPLs**:
 
 - Python
-    + official/builtin
-        - For python < 3.12, use `--no-bpaste/-N`.
+    + stock console
+        - Tested against various python3 REPLs.
+        - For python <= 3.12, use `--no-bpaste/-N`. Python >= 3.13 uses bracketed paste.
     + ipython
         - Special --ipy-cpaste command for `%cpaste` pasting (I rarely need this).
     + ptpython
@@ -50,7 +51,7 @@ FRs and PRs welcome!
 
 ### With uv (recommended)
 
-Use py 3.12 or greater.
+Use python >= 3.12.
 
 ```bash
 uv tool install --python 3.12 replink
@@ -62,34 +63,54 @@ uv tool install --python 3.12 replink
 replink send -l LANGUAGE -t TARGET [OPTIONS] [TEXT/-]
 ```
 
-### Examples
-
-**Send to TMUX pane on the right:**
-```bash
-cat script.py | replink send -l python -t tmux:p=right
-```
-
-**Send to TMUX pane with ID = 1** (`<prefix-key> q`)
-```bash
-replink send -l python -t tmux:p=1 'print("hello")'
-```
-
-**Python < 3.13 (no bracketed paste):**
-```bash
-cat script.py | replink send -l python -t tmux:p=right --no-bpaste
-```
-
-**IPython with %cpaste:**
-```bash
-cat script.py | replink send -l python -t tmux:p=right --ipy-cpaste
-```
-
 ### Options
 
 - `-l, --lang`: Language (currently only `python`)
 - `-t, --target`: Target configuration (e.g., `tmux:p=right`, `tmux:p=1`)
 - `-N, --no-bpaste`: Disable bracketed paste (for Python < 3.13)
 - `--ipy-cpaste`: Use IPython's %cpaste command
+
+### Examples
+
+#### Pipe code in
+
+This is how I usually use replink, except I pipe in whatever is selected in my editor.
+
+```bash
+cat script.py | replink send -l python -t tmux:p=right
+```
+
+`tmux:p=right` means 'use TMUX and send to the pane on the right of the current pane'. (The value of `p` is anything that can be interpreted by `tmux selectp -t $VALUE`.)
+
+Specifying the TMUX target using the pane number is also valid. (Hitting `<prefix-key> q` shows the pane numbers.)
+
+```bash
+echo 'print("well hello there")' | replink send -l python -t tmux:p=4
+```
+
+#### Code as an argument
+
+Code can also be passed to `replink` as a positional argument.
+
+```bash
+replink send -l python -t tmux:p=right 'print("oh hi!")'
+```
+
+I only really use this when I'm debugging, since Python's built-in debugger doesn't play nice with active pipes.
+
+However, it makes the following slightly easier to write:
+
+```bash
+replink send -l python -t tmux:p=right 'exit()'
+```
+
+#### Python < 3.13 (no bracketed paste):
+
+Up to and including Python 3.12, the standard Python console doesn't support bracketed paste, so make sure to disable it with `--no-bpaste` (or `-N`).
+
+```bash
+cat script.py | replink send -l python -t tmux:p=right --no-bpaste
+```
 
 ## Editor Integration
 
