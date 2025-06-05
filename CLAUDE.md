@@ -14,7 +14,7 @@ Claude addresses the user as 'Adriaan'.
 
 ### About
 
-replink is a simple CLI for sending text to an interactive programming console, aka REPL.
+replink is a simple CLI for piping code to a REPL running in a different pane. Version 0.1.0.
 
 Current scope:
 
@@ -27,10 +27,11 @@ Current scope:
 - Targets (a pane running inside [...]):
    - TMUX
 
-CLI subcommands:
+CLI interface:
 
-1. `connect`: Connect the editor to the target pane. (Will be implemented in the future. See 'Assumptions' section.)
-2. `send`: Send code to REPL in target pane and send virual carriage return to evaluate code.
+- `send`: Send code to REPL in target pane (main command, fully implemented)
+- `connect`: Connect the editor to the target pane (placeholder, not implemented)
+- `debug-target`: Debug target configuration (placeholder, not implemented)
 
 How to use:
 
@@ -62,13 +63,13 @@ The target REPL is running in a TMUX pane immediately to the right.
 
 Python REPLs have different capabilities:
 
-- **Python < 3.13**: No bracketed paste support. Requires special handling:
+- **Python < 3.12**: No bracketed paste support. Requires special handling:
   - ALL blank lines must be removed from code blocks to prevent premature execution
   - The Python REPL interprets any blank line as "end of indented block"
-  - After pasting, an Enter key must be sent to execute the code
-  - Implementation follows vim-slime's approach exactly
+  - Special newline handling added at end based on code structure
+  - Implementation follows vim-slime's approach
   
-- **Python >= 3.13**: Bracketed paste supported
+- **Python >= 3.12**: Bracketed paste supported
 - **IPython**: Bracketed paste supported, also supports %cpaste for complex code  
 - **ptpython**: Bracketed paste supported
 
@@ -82,16 +83,15 @@ Python REPLs have different capabilities:
    
 3. **Python Preprocessing**:
    
-   **For Non-Bracketed Paste (Python < 3.13)**:
+   **For Non-Bracketed Paste (Python < 3.12)**:
    - Remove ALL blank lines (prevents premature execution in Python REPL)
    - Dedent the code
-   - Add blank lines between indented and unindented sections (except elif/else/except/finally)
    - Calculate trailing newlines based on code structure:
      - Indented last line → 2 newlines
-     - Single-line block definitions (e.g., `def foo(): ...`) → 2 newlines
+     - Block-starting keywords (def, class, if, etc.) → 2 newlines
      - Simple statements → 1 newline
    
-   **For Bracketed Paste (Python >= 3.13)**:
+   **For Bracketed Paste (Python >= 3.12)**:
    - Preserve all blank lines (REPL handles them correctly with bracketed paste)
    - Ensure code always ends with exactly ONE newline
    - This simplifies maintenance as all targets only need to send one Enter key
@@ -104,37 +104,44 @@ Python REPLs have different capabilities:
 
 The implementation is fully functional for both Python REPL modes:
 
-- **Python < 3.13** (`--py --no-bpaste`): Non-bracketed paste mode with smart newline handling
-- **Python >= 3.13, IPython, ptpython** (`--py`): Bracketed paste mode with same preprocessing
+- **Python < 3.12** (`--no-bpaste`): Non-bracketed paste mode with smart newline handling
+- **Python >= 3.12, IPython, ptpython** (default): Bracketed paste mode with proper preprocessing
 
-Key discoveries during implementation:
+Key implementation details:
 - Python REPLs interpret ANY blank line as "end of indented block", causing premature execution
 - Different code structures require different numbers of trailing newlines for proper execution
 - Bracketed paste allows preservation of blank lines, improving code readability
 - Standardizing on one trailing newline for bracketed paste simplifies multi-target support
-- The regex pattern for adding newlines between sections is critical: `(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))`
-
-Vim-slime's approach is the reference implementation. Follow it exactly rather than inventing new solutions.
+- Simplified preprocessing that achieves vim-slime's goals without complex regex patterns
+- TMUX sends text in 1000-character chunks to prevent buffer overflow
 
 ### CLI Interface
 
-Current implementation:
+Current implementation uses a single `send` command:
+- `text`: Positional argument for code (defaults to `-` for stdin)
 - `-l/--lang` (required): Language to send (currently only `python`)
 - `-t/--target` (required): Target config, e.g. `tmux:p=right` or `tmux:p=1`
-- `-N/--no-bpaste`: Disable bracketed paste (required for Python < 3.13)
+- `-N/--no-bpaste`: Disable bracketed paste (required for Python < 3.12)
 - `--ipy-cpaste`: Use IPython's %cpaste command
+- `--debug`: Enable debug logging
 - `--no-bpaste` and `--ipy-cpaste` are mutually exclusive
 
 Usage examples:
 ```bash
-# Python 3.13+, IPython, or ptpython (with bracketed paste)
+# Python 3.12+, IPython, or ptpython (with bracketed paste)
 cat code.py | replink send --lang python --target tmux:p=right
 
-# Python 3.12 or below (without bracketed paste)
+# Pass code as argument
+replink send --lang python --target tmux:p=right 'print("hello")'
+
+# Python 3.11 or below (without bracketed paste)
 cat code.py | replink send --lang python --target tmux:p=right --no-bpaste
 
 # IPython with %cpaste
 cat code.py | replink send --lang python --target tmux:p=right --ipy-cpaste
+
+# Use "right" to auto-detect right pane
+replink send -l python -t tmux:p=right - < code.py
 ```
 
 ### Architecture
@@ -162,6 +169,8 @@ Key design principles:
 - Core orchestrates the flow without modifying data
 - Dynamic imports in CLI based on user configuration
 - Clean separation using protocols and dataclasses
+- Configuration uses dataclasses with metadata for aliases
+- Target configurations parsed from strings (e.g., "tmux:p=right")
 
 
 ### Reference
@@ -176,8 +185,9 @@ Key design principles:
 
 ### Project
 
-- The CLI is implemented in Python (3.12). Use uv (by astral.sh) for python, venv, and dependency management.
+- The CLI is implemented in Python (3.12+). Use uv (by astral.sh) for python, venv, and dependency management.
 - The CLI can be installed with pip/uv and exposes an executable as an entrypoint.
+- No external dependencies - uses only Python standard library.
 - Write tests using pytest. Tests help catch regressions and document expected behavior.
 
 ### General
@@ -191,5 +201,6 @@ Key design principles:
 - The coding style should be more similar to Rust than Java. Avoid junior developer OOP patterns.
 - Do not needlessly complicate things.
 - Tests should be located in tests/
-- Use pytest for tests.
-- do not add indirection unless it serves a clear and explainable purpose
+- Use pytest for tests
+- Do not add indirection unless it serves a clear and explainable purpose
+- Follow established patterns from vim-slime rather than inventing new solutions
