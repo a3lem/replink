@@ -1,4 +1,4 @@
-name: Build and Publish to TestPyPI
+name: Build and Publish to PyPI
 
 on:
   release:
@@ -8,6 +8,7 @@ on:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       contents: read
       id-token: write  # Required for trusted publishing
@@ -32,8 +33,7 @@ jobs:
         name: python-package-distributions
         path: dist/
     
-    - name: Publish to TestPyPI
+    - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        repository-url: https://test.pypi.org/legacy/
         skip-existing: true  # Skip if version already exists

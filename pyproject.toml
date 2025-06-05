@@ -1,7 +1,7 @@
 [project]
 name = "replink"
 version = "0.1.0"
-description = "A simple CLI for piping code to a REPL in a separate pane"
+description = "A simple CLI for piping code to a REPL running in a separate pane"
 readme = "README.md"
 requires-python = ">=3.12"  # extend to lower versions?
 dependencies = []
