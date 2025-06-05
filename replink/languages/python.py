@@ -91,7 +91,7 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
     lines = dedented_text.split("\n")
     no_empty_lines_text = "\n".join(line for line in lines if line.strip())
 
-    has_medial_newlines = len(no_empty_lines_text )< len(dedented_text)
+    has_medial_newlines = len(no_empty_lines_text) < len(dedented_text)
 
     # dedented_lines = no_empty_lines
 

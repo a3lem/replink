@@ -33,6 +33,7 @@ class Target_P(DataclassProtocol, Protocol):
         """
         ...
 
+
 @enum.unique
 class TargetType(enum.StrEnum):
     TMUX = enum.auto()  # becomes 'tmux'
@@ -81,7 +82,9 @@ def parse_target_config_str(
     return target_type, cfg_data
 
 
-def target_from_cfg_data(cfg_data: dict[str, str], target_cls: type[Target_P]) -> Target_P:
+def target_from_cfg_data(
+    cfg_data: dict[str, str], target_cls: type[Target_P]
+) -> Target_P:
     """
     Example:
         >>> from replink.targets.tmux import TmuxTarget

@@ -8,7 +8,6 @@ from enum import Enum, auto, StrEnum
 import typing as T
 
 
-
 class PieceType(Enum):
     """Type of piece to send."""
 
@@ -66,5 +65,3 @@ class Language_P(T.Protocol):
 
 class Language(StrEnum):
     PYTHON = "python"
-
-

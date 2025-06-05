@@ -81,7 +81,9 @@ def create_cli_parser() -> argparse.ArgumentParser:
     )
     #
     # Connect command (placeholder for future implementation)
-    _ = subparsers.add_parser("debug-target", help="Debug target string (Not implemented yet)")
+    _ = subparsers.add_parser(
+        "debug-target", help="Debug target string (Not implemented yet)"
+    )
 
     return parser
 
@@ -160,7 +162,7 @@ def main(argv: T.Optional[list[str]] = None) -> int:
         logger.setLevel(logging.DEBUG)
         handler = logging.StreamHandler()
         handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.debug("Debug logging enabled")
