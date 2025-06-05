@@ -108,8 +108,8 @@ Now you can select code and press `<minus>x` to send it to your Python REPL. (I 
 **Pro tip**: If you're building Helix from master, you can specify the language dynamically by passing it in as a [command line expansion](https://docs.helix-editor.com/master/command-line.html#expansions). For example:
 
 ```toml
-[keys.normal]
-"<space>x" = ":pipe-to replink send -l %{language} -t tmux:p=right"
+[keys.normal."minus"]
+"x" = ":pipe-to replink send -l %{language} -t tmux:p=right"
 ```
 
 ### Vim/Neovim
