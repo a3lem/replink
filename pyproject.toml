@@ -1,10 +1,24 @@
 [project]
 name = "replink"
 version = "0.1.0"
-description = "A simple CLI to send text to a Python REPL in a tmux pane"
+description = "A simple CLI for piping code to a REPL in a separate pane"
 readme = "README.md"
 requires-python = ">=3.12"  # extend to lower versions?
 dependencies = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: System :: Shells",
+    "Topic :: Utilities",
+]
 
 [project.scripts]
 replink = "replink.cli:main"
@@ -20,3 +34,9 @@ packages = ["replink"]
 dev = [
     "pytest>=8.3.5",
 ]
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
