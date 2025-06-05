@@ -1,6 +1,6 @@
-```text
-[>_] -> [>_]
-```
+<p align="center">
+  <img src="assets/replink_banner.png" alt="replink banner" width="50%">
+</p>
 
 # replink
 
