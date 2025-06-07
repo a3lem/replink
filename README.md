@@ -10,7 +10,7 @@ Handy when you want to evaluate code interactively, but your [favorite code edit
 
 ## Demo
 
-[video link]
+![Demo GIF](https://github.com/user-attachments/assets/ec7962d4-8401-4f8b-bb68-047879fd3917)
 
 ## Why?
 
