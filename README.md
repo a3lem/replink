@@ -4,7 +4,7 @@
 
 # replink
 
-`replink` is a CLI tool for piping code to a REPL running in a different pane.
+`replink` is a CLI tool for piping code to a REPL running in a different pane and executing it there.
 
 Handy when you want to evaluate code interactively, but your [favorite code editor](https://docs.helix-editor.com/master/) doesn't have a plugin system [(yet)](https://github.com/helix-editor/helix/pull/8675) but can [pipe selected text to a shell command](https://docs.helix-editor.com/commands.html#:~:text=the%20shell%20command.-,%3Apipe%2Dto,-Pipe%20each%20selection)!
 
