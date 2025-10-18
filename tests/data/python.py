@@ -1,6 +1,6 @@
-print("hello, world!")
-
 from dataclasses import dataclass
+
+print("hello, world!")
 
 a = 10
 
@@ -51,14 +51,10 @@ print(f"{people_avg_age=}")
 
 def hello_world():
     for i in range(4):
-        print("hello world")
-
-def hello_world(): ...
-
-try:
-    print("hi")
-except:
-    pass
+        try:
+            print("hello world")
+        except:
+            pass
 
 
 a = 2

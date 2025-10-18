@@ -37,6 +37,7 @@ class Target_P(DataclassProtocol, Protocol):
 @enum.unique
 class TargetType(enum.StrEnum):
     TMUX = enum.auto()  # becomes 'tmux'
+    ZELLIJ = enum.auto()  # becomes 'zellij'
 
 
 class TargetStringParseError(Exception): ...

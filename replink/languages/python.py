@@ -62,9 +62,9 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
     """Prepare Python code for sending to REPL.
 
     For non-bracketed paste (Python < 3.13):
-    1. Remove all blank lines (Python REPL treats them as "end of block")
-    2. Dedent the code
-    3. Add blank lines between indented and unindented sections
+    1. Dedent the code
+    2. Remove all blank lines (Python REPL treats them as "end of block")
+    3. Add strategic blank lines between indented and unindented sections
     4. Ensure proper number of trailing newlines based on code structure
 
     For bracketed paste (Python >= 3.13):
@@ -93,21 +93,15 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
 
     has_medial_newlines = len(no_empty_lines_text) < len(dedented_text)
 
-    # dedented_lines = no_empty_lines
-
-    # Step 3: Add newlines between indented and unindented lines
+    # Step 2: Add newlines between indented and unindented lines
     # This helps REPL understand where blocks end
     # Pattern: indented line followed by unindented line (excluding elif/else/except/finally)
-    # add_eol_pat = r"(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))"
-    # result = re.sub(add_eol_pat, r"\1\n", dedented_lines)
+    add_eol_pat = r"(\n[ \t][^\n]+\n)(?=(?:(?!elif|else|except|finally)\S|$))"
+    processed_text = re.sub(add_eol_pat, r"\1\n", no_empty_lines_text)
 
-    # Step 4: Determine how many trailing newlines we need
+    # Step 3: Determine how many trailing newlines we need
     # Check if the last non-empty line is indented or if we have block-starting keywords
-    result_lines = no_empty_lines_text.split("\n")
-
-    # Remove trailing empty lines for analysis
-    # while result_lines and not result_lines[-1].strip():
-    #     result_lines.pop()
+    result_lines = processed_text.split("\n")
 
     needs_double_newline = False
     if result_lines:
@@ -130,8 +124,10 @@ def prepare_python_blocks(text: str, use_bracketed_paste: bool = True) -> list[P
 
     if use_bracketed_paste:
         result = dedented_text
+        # Always ensure bracketed paste ends with exactly one newline
+        result += "\n"
     else:
-        result = no_empty_lines_text
+        result = processed_text
         result += "\n"
 
     logger.debug(f"{needs_double_newline=}")

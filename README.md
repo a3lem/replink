@@ -42,6 +42,7 @@ I built `replink` because I got used to sending Python code to a REPL early on i
 **Targets**:
 
 - TMUX
+- Zellij
 
 Adding new languages and targets is straightforward. Any language or target available in [vim-slime](https://github.com/jpalardy/vim-slime) can be ported over. This is because `replink`'s architecture borrows heavily from vim-slime.
 
@@ -66,15 +67,20 @@ replink send -l LANGUAGE -t TARGET [OPTIONS] [TEXT/-]
 ### Options
 
 - `-l, --lang`: Language (currently only `python`)
-- `-t, --target`: Target configuration (e.g., `tmux:p=right`, `tmux:p=1`)
+- `-t, --target`: Target configuration
+  - TMUX: `tmux:p=<pane>` (e.g., `tmux:p=right`, `tmux:p=1`)
+  - Zellij: `zellij:p=<direction>` or `zellij:s=<session>:p=<direction>`
 - `-N, --no-bpaste`: Disable bracketed paste (for Python < 3.13)
 - `--ipy-cpaste`: Use IPython's %cpaste command
+- `--debug`: Enable debug logging
 
 ### Examples
 
 #### Pipe code in
 
 This is how I usually use replink, except I pipe in whatever is selected in my editor.
+
+##### TMUX
 
 ```bash
 cat script.py | replink send -l python -t tmux:p=right
@@ -86,6 +92,22 @@ Specifying the TMUX target using the pane number is also valid. (Hitting `<prefi
 
 ```bash
 echo 'print("well hello there")' | replink send -l python -t tmux:p=4
+```
+
+##### Zellij
+
+```bash
+cat script.py | replink send -l python -t zellij:p=right
+```
+
+`zellij:p=right` means 'use Zellij and send to the pane on the right of the current pane'.
+
+Zellij only supports directional positioning: `current`, `right`, `left`, `up`, `down`.
+
+You can also target a specific Zellij session:
+
+```bash
+cat script.py | replink send -l python -t zellij:s=dev:p=down
 ```
 
 #### Code as an argument
@@ -104,12 +126,16 @@ However, it makes the following slightly easier to write:
 replink send -l python -t tmux:p=right 'exit()'
 ```
 
-#### Python < 3.13 (no bracketed paste):
+#### Python < 3.13 (no bracketed paste)
 
 Up to and including Python 3.12, the standard Python console doesn't support bracketed paste, so make sure to disable it with `--no-bpaste` (or `-N`).
 
 ```bash
+# TMUX
 cat script.py | replink send -l python -t tmux:p=right --no-bpaste
+
+# Zellij
+cat script.py | replink send -l python -t zellij:p=right --no-bpaste
 ```
 
 ## Editor Integration
@@ -120,17 +146,24 @@ Add to your `~/.config/helix/config.toml`:
 
 ```toml
 [keys.normal."minus"]
+# For TMUX
 x = ":pipe-to replink send -l python -t tmux:p=right"
+
+# For Zellij
+x = ":pipe-to replink send -l python -t zellij:p=right"
 ```
 
 Now you can select code and press `<minus>x` to send it to your Python REPL. (I use minus/dash (`-`) as my leader for custom keybindings.)
-
 
 **Pro tip**: If you're building Helix from master, you can specify the language dynamically by passing it in as a [command line expansion](https://docs.helix-editor.com/master/command-line.html#expansions). For example:
 
 ```toml
 [keys.normal."minus"]
+# TMUX
 "x" = ":pipe-to replink send -l %{language} -t tmux:p=right"
+
+# Zellij
+"x" = ":pipe-to replink send -l %{language} -t zellij:p=right"
 ```
 
 ### Vim/Neovim
@@ -168,7 +201,7 @@ Adding languages means implementing the `Language_P` protocol in `replink/langua
 
 Adding targets means implementing the `Target_P` protocol in `replink/targets/`. You handle the mechanics of getting text to wherever the REPL is running.
 
-Right now there's just Python and tmux, but the design should make it straightforward to add JavaScript/Node, Ruby, R, or whatever. Same for targets like GNU Screen, Zellij, or terminal emulators with their own APIs.
+Right now there's just Python and tmux/zellij, but the design should make it straightforward to add JavaScript/Node, Ruby, R, or whatever. Same for targets like GNU Screen or terminal emulators with their own APIs.
 
 ## Contributing
 

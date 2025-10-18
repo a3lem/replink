@@ -117,6 +117,10 @@ def send_command(text: str, args: argparse.Namespace) -> int:
             from replink.targets.tmux import TmuxTarget
 
             target = target_from_cfg_data(target_cfg_data, TmuxTarget)
+        case TargetType.ZELLIJ:
+            from replink.targets.zellij import ZellijTarget
+
+            target = target_from_cfg_data(target_cfg_data, ZellijTarget)
         case _:
             raise ValueError(f"Unsupported target: {target_name}")
 

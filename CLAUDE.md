@@ -26,6 +26,7 @@ Current scope:
 
 - Targets (a pane running inside [...]):
    - TMUX
+   - Zellij
 
 CLI interface:
 
@@ -41,6 +42,9 @@ cat code.py | replink send -l python -t tmux:p=1 -  # the `-` is optional.
 
 # Or pass code as argument
 replink send -l python -t tmux:p=right --no-bpaste 'print("hello!")'
+
+# Zellij target (uses directional positioning)
+cat code.py | replink send -l python -t zellij:p=right -
 ```
 
 Context:
@@ -57,7 +61,7 @@ Replink exists because sending well-formatted code to a REPL is actually very di
 
 ### Implementation Details
 
-The target REPL is running in a TMUX pane immediately to the right.
+The target REPL is running in a terminal multiplexer pane (TMUX or Zellij) immediately to the right.
 
 #### Python REPL Support
 
@@ -82,23 +86,29 @@ Python REPLs have different capabilities:
    - Target (tmux) sends text exactly as received from language processor
    
 3. **Python Preprocessing**:
-   
+
    **For Non-Bracketed Paste (Python < 3.12)**:
-   - Remove ALL blank lines (prevents premature execution in Python REPL)
    - Dedent the code
+   - Remove ALL blank lines (prevents premature execution in Python REPL)
+   - Add strategic blank lines between indented/unindented blocks (signals end of block to REPL)
    - Calculate trailing newlines based on code structure:
      - Indented last line → 2 newlines
      - Block-starting keywords (def, class, if, etc.) → 2 newlines
      - Simple statements → 1 newline
-   
+
    **For Bracketed Paste (Python >= 3.12)**:
    - Preserve all blank lines (REPL handles them correctly with bracketed paste)
    - Ensure code always ends with exactly ONE newline
-   - This simplifies maintenance as all targets only need to send one Enter key
+   - Target sends this newline plus additional Enter key(s) to execute
 
 4. **Enter Key Behavior**:
-   - Bracketed paste: Send exactly one Enter key (code already ends with one newline)
-   - Non-bracketed paste: No Enter key sent (newlines already included in text)
+   - **TMUX**:
+     - Bracketed paste: Send one `Enter` key (via `send-keys`)
+     - Non-bracketed paste: No Enter key (newlines already in text)
+   - **Zellij**:
+     - Bracketed paste: Send TWO carriage returns (`write 13` twice) - one to end paste mode, one to execute
+     - Non-bracketed paste: No Enter key (newlines already in text)
+     - Note: Zellij requires `write 13` (CR) not `write 10` (LF) for Enter key simulation
 
 #### Implementation Status
 
@@ -130,18 +140,23 @@ Usage examples:
 ```bash
 # Python 3.12+, IPython, or ptpython (with bracketed paste)
 cat code.py | replink send --lang python --target tmux:p=right
+cat code.py | replink send --lang python --target zellij:p=right
 
 # Pass code as argument
 replink send --lang python --target tmux:p=right 'print("hello")'
 
 # Python 3.11 or below (without bracketed paste)
 cat code.py | replink send --lang python --target tmux:p=right --no-bpaste
+cat code.py | replink send --lang python --target zellij:p=left --no-bpaste
 
 # IPython with %cpaste
 cat code.py | replink send --lang python --target tmux:p=right --ipy-cpaste
 
-# Use "right" to auto-detect right pane
+# Use "right" to auto-detect right pane (tmux only)
 replink send -l python -t tmux:p=right - < code.py
+
+# Zellij with session ID
+replink send -l python -t zellij:s=dev:p=down - < code.py
 ```
 
 ### Architecture
@@ -160,6 +175,7 @@ replink/
 └── targets/        # Target-specific sending mechanisms
     ├── common.py      # Target protocol and configuration parsing
     ├── tmux.py        # Tmux pane integration
+    ├── zellij.py      # Zellij pane integration
     └── __init__.py    # Target package
 ```
 
@@ -170,7 +186,27 @@ Key design principles:
 - Dynamic imports in CLI based on user configuration
 - Clean separation using protocols and dataclasses
 - Configuration uses dataclasses with metadata for aliases
-- Target configurations parsed from strings (e.g., "tmux:p=right")
+- Target configurations parsed from strings (e.g., "tmux:p=right", "zellij:s=dev:p=down")
+
+#### Zellij Target Specifics
+
+Key differences from TMUX:
+
+- **No numeric pane IDs**: Zellij only supports directional positioning (`current`, `right`, `left`, `up`, `down`)
+- **Session support**: Can target specific zellij sessions with `s=session-name`
+- **Enter key simulation**: Must use `action write 13` (carriage return) not `10` (line feed) [ref: zellij#2228]
+- **Bracketed paste behavior**: Requires TWO Enter keys after bracketed paste (one to exit paste mode, one to execute)
+- **Focus management**: Target handles moving focus to/from target pane automatically
+- **Command format**:
+  - Current session: `zellij action <command>`
+  - Named session: `zellij -s <session> action <command>`
+
+Target string format: `zellij:p=<direction>` or `zellij:s=<session>:p=<direction>`
+
+Examples:
+- `zellij:p=right` - send to pane on the right in current session
+- `zellij:s=dev:p=up` - send to pane above in session named "dev"
+- `zellij:p=current` - send to current pane (useful for testing)
 
 
 ### Reference
